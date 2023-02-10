@@ -32,4 +32,4 @@ jobs:
       - name: Benchmark
         run: |
           cd benchmark/
-          python benchmark/benchmark_kvsqlite.py --query-count 100000
+          python benchmark_kvsqlite.py --query-count 100000
