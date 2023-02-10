@@ -51,7 +51,7 @@ autoclass_content = "init"
 html_theme_options = {
     "github_url": "https://github.com/AYMENJD/Kvsqlite",
     "header_links_before_dropdown": 4,
-    "show_toc_level": 1,
+    "show_toc_level": 2,
     "show_nav_level": 2,
     # "navbar_align": "left",  # [left, content, right]
     "navbar_center": ["version-switcher", "navbar-nav"],
