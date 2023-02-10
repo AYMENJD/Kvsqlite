@@ -27,6 +27,7 @@ setup(
     project_urls={
         "Source": "https://github.com/AYMENJD/kvsqlite",
         "Tracker": "https://github.com/AYMENJD/kvsqlite/issues",
+        "Documentation": "https://kvsqlite.rtfd.io/",
     },
     packages=find_packages(exclude=["docs", "test", "benchmark"]),
     keywords=[
