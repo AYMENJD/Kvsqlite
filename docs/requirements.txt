@@ -1,2 +1,3 @@
-sphinx_copybutton
-sphinx_design
+sphinx-copybutton
+sphinx-design
+pydata-sphinx-theme
