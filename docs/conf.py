@@ -1,11 +1,18 @@
 import os
 import sys
+import re
+import subprocess
 
-sys.path.insert(0, os.path.abspath("../.."))
+sys.path.insert(0, os.path.abspath("../"))
+
+subprocess.call(["pip", "install", "."], cwd="../")
 
 project = "Kvsqlite"
 copyright = "2023, AYMEN Mohammed"
 author = "AYMEN Mohammed"
+
+with open("../kvsqlite/__init__.py", "r") as f:
+    version = re.findall(r"__version__ = \"(.+)\"", f.read())[0]
 
 extensions = [
     "sphinx.ext.intersphinx",
@@ -24,8 +31,8 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     ".DS_Store",
-    "modules.rst",
-    "kvsqlite.rst",
+    # "modules.rst",
+    # "kvsqlite.rst",
 ]
 templates_path = ["_templates"]
 
