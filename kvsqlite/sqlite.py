@@ -109,7 +109,7 @@ class Sqlite(Thread):
                         'SELECT EXISTS(SELECT k FROM "{}" WHERE k = ?)'.format(
                             self.table_name
                         ),
-                        (k,),
+                        (key,),
                     ).fetchone()
 
                     if query:
