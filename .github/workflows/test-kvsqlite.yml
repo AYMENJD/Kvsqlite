@@ -1,0 +1,36 @@
+name: Test kvsqlite
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+
+    paths:
+      - "kvsqlite/client.py"
+      - "kvsqlite/sqlite.py"
+      - "test/"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio
+
+      - name: Test
+        run: |
+          cd test/
+          pytest -v
