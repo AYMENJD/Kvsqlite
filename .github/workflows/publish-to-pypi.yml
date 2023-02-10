@@ -1,0 +1,28 @@
+name: Publish to pypi
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+
+    paths:
+      - "kvsqlite/__init__.py"
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build kvsqlite
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - run: |
+          python setup.py sdist
+
+      - name: Upload to pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
