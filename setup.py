@@ -8,9 +8,6 @@ with open("kvsqlite/__init__.py", "r") as f:
 with open("README.md", "r") as f:
     readme = f.read()
 
-with open("requirements.txt", "r") as f:
-    requirements = [x.strip() for x in f.readlines()]
-
 
 setup(
     name="Kvsqlite",
@@ -23,7 +20,6 @@ setup(
     url="https://github.com/AYMENJD/kvsqlite",
     license="MIT",
     python_requires=">=3.8",
-    install_requires=requirements,
     project_urls={
         "Source": "https://github.com/AYMENJD/kvsqlite",
         "Tracker": "https://github.com/AYMENJD/kvsqlite/issues",
