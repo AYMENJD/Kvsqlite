@@ -18,7 +18,7 @@ pip install kvsqlite
 ```
 From github (dev version)
 ```bash
-pip install git+https://github.com/AYEMNJD/Kvsqlite
+pip install git+https://github.com/AYMENJD/Kvsqlite
 ```
 
 ### Documentation
