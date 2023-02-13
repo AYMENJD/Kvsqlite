@@ -1,9 +1,8 @@
 import sqlite3
 import logging
 
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from queue import Queue
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,9 @@ class REQUEST:
     CLOSE = "close"
 
 
-TABLE_STATEMENT = 'CREATE TABLE IF NOT EXISTS "{}" (k TEXT PRIMARY KEY, v BLOB)'
+TABLE_STATEMENT = (
+    'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB)'
+)
 
 
 class Sqlite:
