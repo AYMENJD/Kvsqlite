@@ -4,6 +4,13 @@ Welcome to Kvsqlite
 
 **Kvsqlite** is easy, sample and powerful key-value database backed by sqlite3.
 
+Features
+--------
+
+- Fast and easy-to-use database
+- Simultaneously **asynchronous** or **synchronous** calls
+- Store any data supported by [**pickle**](https://docs.python.org/3/library/pickle.html)
+
 Installation
 ------------
 .. code-block:: bash

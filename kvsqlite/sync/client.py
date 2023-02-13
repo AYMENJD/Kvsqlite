@@ -1,10 +1,9 @@
-import asyncio
 import logging
 
 from typing import Any, List, Tuple, Union
-from .sqlite import Sqlite, REQUEST
-from .encoders import PickleEncoder
-from .base import BaseClient
+from ..sqlite import Sqlite, REQUEST
+from ..encoders import PickleEncoder
+from ..base import BaseClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +18,8 @@ class Client(BaseClient):
         synchronous: str = "NORMAL",
         default_encoder=PickleEncoder,
         workers: int = 2,
-        loop: asyncio.AbstractEventLoop = None,
     ):
-        """Kvsqlite asynchronous client
+        """Kvsqlite synchronous client
 
         Args:
             database (``str``):
@@ -44,9 +42,6 @@ class Client(BaseClient):
 
             workers (``int``, *optional*):
                 The number of workers which process sqlite queries. Defaults to ``2``.
-
-            loop (:py:class:`~asyncio.AbstractEventLoop`, *optional*):
-                Event loop. Defaults to ``None``.
         """
         assert isinstance(database, str), "database must be str"
         assert isinstance(table_name, str), "table_name must be str"
@@ -71,11 +66,6 @@ class Client(BaseClient):
         self.synchronous = synchronous
         self.__encoder = default_encoder()
         self.workers = workers
-        self.loop = (
-            loop
-            if isinstance(loop, asyncio.AbstractEventLoop)
-            else asyncio.get_event_loop()
-        )
 
         self.__sqlite = Sqlite(
             self.database,
@@ -89,58 +79,51 @@ class Client(BaseClient):
 
         logger.debug("Using {} as encoder".format(default_encoder.__name__))
 
-    async def __aenter__(self):
+    def __enter__(self):
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            await self.close()
+            self.close()
         except Exception:
-            logger.exception("Error on __aexit__")
+            logger.exception("Error on __exit__")
 
-    async def get(self, key: str) -> Any:
+    def get(self, key: str) -> Any:
         assert isinstance(key, str), "key must be str"
 
-        return await self.__invoke(request=REQUEST.GET, key=key)
+        return self.__invoke(request=REQUEST.GET, key=key)
 
-    async def set(self, key: str, value) -> bool:
+    def set(self, key: str, value) -> bool:
         assert isinstance(key, str), "key must be str"
 
-        future = self.__invoke(request=REQUEST.SET, key=key, value=value)
-        return await future
+        return self.__invoke(request=REQUEST.SET, key=key, value=value)
 
-    async def delete(self, key: str) -> bool:
+    def delete(self, key: str) -> bool:
         assert isinstance(key, str), "key must be str"
 
-        future = self.__invoke(request=REQUEST.DELETE, key=key)
-        return await future
+        return self.__invoke(request=REQUEST.DELETE, key=key)
 
-    async def commit(self) -> bool:
-        future = self.__invoke(request=REQUEST.COMMIT)
-        return await future
+    def commit(self) -> bool:
+        return self.__invoke(request=REQUEST.COMMIT)
 
-    async def exists(self, key: str) -> bool:
+    def exists(self, key: str) -> bool:
         assert isinstance(key, str), "key must be str"
 
-        future = self.__invoke(request=REQUEST.EXISTS, key=key)
-        return await future
+        return self.__invoke(request=REQUEST.EXISTS, key=key)
 
-    async def keys(self) -> Union[List[Tuple[str]], None]:
-        future = self.__invoke(request=REQUEST.KEYS)
-        return await future
+    def keys(self) -> Union[List[Tuple[str]], None]:
+        return self.__invoke(request=REQUEST.KEYS)
 
-    async def flush(self) -> bool:
-        future = self.__invoke(request=REQUEST.FLUSH_DB)
-        return await future
+    def flush(self) -> bool:
+        return self.__invoke(request=REQUEST.FLUSH_DB)
 
-    async def close(self, optimize_database: bool = True) -> bool:
+    def close(self, optimize_database: bool = True) -> bool:
         assert isinstance(optimize_database, bool), "optimize_database must be bool"
 
-        future = self.__invoke(request=REQUEST.CLOSE, value=optimize_database)
-        return await future
+        return self.__invoke(request=REQUEST.CLOSE, value=optimize_database)
 
     def __invoke(self, request, key=None, value=None):
         assert self.__sqlite.is_running, "Database is closed"
 
         future = self.__sqlite.request(request, key, value)
-        return asyncio.wrap_future(future, loop=self.loop)
+        return future.result()

@@ -1,6 +1,12 @@
 # Kvsqlite [![version](https://img.shields.io/pypi/v/Kvsqlite?style=flat&logo=pypi)](https://pypi.org/project/Kvsqlite) [![Downloads](https://static.pepy.tech/personalized-badge/Kvsqlite?period=month&units=none&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/Kvsqlite)
 Easy, Sample and powerful key-value database backed by sqlite3.
 
+### Features
+
+- Fast and easy-to-use database
+- Simultaneously **asynchronous** or **synchronous** calls
+- Store any data supported by [**pickle**](https://docs.python.org/3/library/pickle.html)
+
 ### Requirements
 
 - Python3.8+
@@ -15,10 +21,15 @@ From github (dev version)
 pip install git+https://github.com/AYEMNJD/Kvsqlite
 ```
 
+### Documentation
+
+[Kvsqlite](https://github.com/AYMENJD/Kvsqlite) documentation available at https://kvsqlite.rtfd.io/.
+
 ### Usage
 
 ```python
-import kvsqlite, asyncio
+from kvsqlite import Client # For sync version do: from kvsqlite.sync import Client
+import asyncio
 
 async def main():
     async with kvsqlite.Client("kv.sqlite") as db:
@@ -39,5 +50,3 @@ async def main():
 
 asyncio.run(main())
 ```
-
-Check all available methods at https://kvsqlite.rtfd.io/en/latest/API.html.

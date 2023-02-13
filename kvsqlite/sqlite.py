@@ -1,7 +1,8 @@
 import sqlite3
 import logging
 
-from threading import Thread
+from concurrent.futures import ThreadPoolExecutor, Future
+from threading import Lock
 from queue import Queue
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class REQUEST:
 TABLE_STATEMENT = 'CREATE TABLE IF NOT EXISTS "{}" (k TEXT PRIMARY KEY, v BLOB)'
 
 
-class Sqlite(Thread):
+class Sqlite:
     def __init__(
         self,
         database: str,
@@ -30,6 +31,8 @@ class Sqlite(Thread):
         autocommit: bool,
         journal_mode: str,
         synchronous: str,
+        encoder,
+        workers: int,
     ) -> None:
         assert isinstance(database, str), "database must be str"
         assert isinstance(table_name, str), "table_name must be str"
@@ -37,119 +40,125 @@ class Sqlite(Thread):
         assert isinstance(journal_mode, str), "journal_mode must be str"
         assert isinstance(synchronous, str), "synchronous must be str"
 
-        super(Sqlite, self).__init__()
-
         self.database = database
         self.table_name = table_name
         self.autocommit = autocommit
         self.journal_mode = journal_mode
         self.synchronous = synchronous
+        self.__encoder = encoder
+        self.__workers = ThreadPoolExecutor(workers, "kvsqlite")
+        self.__connection: sqlite3.Connection = self.__connect()
+        self.__lock = Lock()
 
-        self.queue = Queue()
-        self.daemon = True
+        self.is_running = True
 
-        self.start()
+    def request(self, request, key: str = None, value=None):
+        return self.__workers.submit(self.procces_request, request, key, value)
 
-    def run(self):
-        connection = self.__connect()
+    def procces_request(self, request, key: str = None, value=None):
+        if not self.is_running:
+            raise RuntimeError("Database is closed")
 
-        while True:
-            request, key, value, future = self.queue.get()
-            logger.debug("Request={}, key={}".format(request, key))
+        logger.debug("Request={}, key={}".format(request, key))
 
-            if request == REQUEST.GET:
+        if request == REQUEST.GET:
+            try:
+                query = self.__connection.execute(
+                    'SELECT v FROM "{}" WHERE k = ?'.format(self.table_name),
+                    (key,),
+                ).fetchone()
+                if query:
+                    return self.__encoder.decode(query[0])
+                else:
+                    return None
+            except Exception as e:
+                logger.exception("SELECT statment error")
+                raise e
+        elif request == REQUEST.SET:
+            with self.__lock:
                 try:
-                    query = connection.execute(
-                        'SELECT v FROM "{}" WHERE k = ?'.format(self.table_name),
-                        (key,),
-                    ).fetchone()
-                    if query:
-                        future.set_result(query[0])
-                    else:
-                        future.set_result(None)
-                except Exception as e:
-                    logger.exception("SELECT statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.SET:
-                try:
-                    query = connection.execute(
+                    query = self.__connection.execute(
                         'REPLACE INTO "{}" (k, v) VALUES(?,?)'.format(self.table_name),
-                        (key, value),
+                        (key, self.__encoder.encode(value)),
                     )
                     if query.rowcount > 0:
-                        future.set_result(True)
+                        return True
                     else:
-                        future.set_result(False)
+                        return False
                 except Exception as e:
                     logger.exception("REPLACE INTO statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.DELETE:
+                    raise e
+        elif request == REQUEST.DELETE:
+            with self.__lock:
                 try:
-                    query = connection.execute(
+                    query = self.__connection.execute(
                         'DELETE FROM "{}" WHERE k = ?'.format(self.table_name),
                         (key,),
                     )
                     if query.rowcount > 0:
-                        future.set_result(True)
+                        return True
                     else:
-                        future.set_result(False)
+                        return False
                 except Exception as e:
                     logger.exception("DELETE statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.COMMIT:
-                try:
-                    connection.commit()
-                    future.set_result(True)
-                except Exception as e:
-                    logger.exception("COMMIT error")
-                    future.set_exception(e)
-            elif request == REQUEST.EXISTS:
-                try:
-                    query = connection.execute(
-                        'SELECT EXISTS(SELECT k FROM "{}" WHERE k = ?)'.format(
-                            self.table_name
-                        ),
-                        (key,),
-                    ).fetchone()
+                    raise e
+        elif request == REQUEST.COMMIT:
+            try:
+                self.__connection.commit()
+                return True
+            except Exception as e:
+                logger.exception("COMMIT error")
+                raise e
+        elif request == REQUEST.EXISTS:
+            try:
+                query = self.__connection.execute(
+                    'SELECT EXISTS(SELECT k FROM "{}" WHERE k = ?)'.format(
+                        self.table_name
+                    ),
+                    (key,),
+                ).fetchone()
 
-                    if query:
-                        future.set_result(bool(query[0]))
-                    else:
-                        future.set_result(False)
-                except Exception as e:
-                    logger.exception("SELECT EXISTS statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.KEYS:
+                if query:
+                    return bool(query[0])
+                else:
+                    return False
+            except Exception as e:
+                logger.exception("SELECT EXISTS statment error")
+                raise e
+        elif request == REQUEST.KEYS:
+            try:
+                query = self.__connection.execute(
+                    'SELECT k FROM "{}" ORDER BY rowid'.format(self.table_name)
+                ).fetchall()
+                if query:
+                    return query
+                else:
+                    return None
+            except Exception as e:
+                logger.exception("SELECT KEYS statment error")
+                raise e
+        elif request == REQUEST.FLUSH_DB:
+            with self.__lock:
                 try:
-                    query = connection.execute(
-                        'SELECT k FROM "{}" ORDER BY rowid'.format(self.table_name)
-                    ).fetchall()
-                    if query:
-                        future.set_result(query)
-                    else:
-                        future.set_result(None)
-                except Exception as e:
-                    logger.exception("SELECT KEYS statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.FLUSH_DB:
-                try:
-                    connection.execute('DROP TABLE "{}"'.format(self.table_name))
-                    connection.execute(TABLE_STATEMENT.format(self.table_name))
-                    future.set_result(True)
+                    self.__connection.execute('DROP TABLE "{}"'.format(self.table_name))
+                    self.__connection.execute(TABLE_STATEMENT.format(self.table_name))
+                    return True
                 except Exception as e:
                     logger.exception("DROP TABLE statment error")
-                    future.set_exception(e)
-            elif request == REQUEST.CLOSE:
+                    raise e
+        elif request == REQUEST.CLOSE:
+            with self.__lock:
                 try:
                     if value:
-                        connection.execute("PRAGMA optimize")
-                    connection.close()
+                        self.__connection.execute("PRAGMA optimize")
+                    self.__connection.close()
                     logger.info("Connection to {} closed".format(self.database))
-                    future.set_result(True)
-                    break
+                    self.__workers.shutdown(False, cancel_futures=True)
+                    self.is_running = False
+                    return True
                 except Exception as e:
                     logger.exception("On close error")
-                    future.set_exception(e)
+                    raise e
 
     def __connect(self):
         try:
@@ -159,9 +168,11 @@ class Sqlite(Thread):
                 )
             else:
                 connection = sqlite3.connect(self.database, check_same_thread=False)
+
+            logger.info("Connected to {}".format(self.database))
         except Exception as e:
             logger.exception(
-                "Error while opening sqlite3 connection for database: {}".format(
+                "Error while opening sqlite3 self.__connection for database: {}".format(
                     self.database
                 )
             )

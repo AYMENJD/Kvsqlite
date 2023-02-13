@@ -1,9 +1,11 @@
-__version__ = "0.1.1"
+__version__ = "0.1.2dev0"
 __copyright__ = "Copyright (c) 2023 AYMEN Mohammed ~ https://github.com/AYMENJD"
 __license__ = "MIT License"
 
 VERSION = __version__
 
-__all__ = ["Client", "PickleEncoder", "StringEncoder"]
+__all__ = ["Client", "PickleEncoder", "StringEncoder", "sync"]
 
-from .client import Client, PickleEncoder, StringEncoder
+from .client import Client
+from .encoders import PickleEncoder, StringEncoder
+from . import sync
