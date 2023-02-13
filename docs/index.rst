@@ -34,7 +34,7 @@ Usage
    import asyncio
 
    async def main():
-      async with kvsqlite.Client("kv.sqlite") as db:
+      async with Client("kv.sqlite") as db:
 
          key = "123-456-789"
          result = await db.set(key, "Hello world. Bye!")
