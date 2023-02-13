@@ -125,8 +125,10 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.EXISTS, key=key)
         return await future
 
-    async def keys(self) -> Union[List[Tuple[str]], None]:
-        future = self.__invoke(request=REQUEST.KEYS)
+    async def keys(self, like: str = "%") -> Union[List[Tuple[str]], None]:
+        assert isinstance(like, str), "like must be str"
+
+        future = self.__invoke(request=REQUEST.KEYS, value=like)
         return await future
 
     async def flush(self) -> bool:

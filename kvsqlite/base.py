@@ -49,8 +49,14 @@ class BaseClient:
         """
         raise NotImplementedError
 
-    def keys(self):
-        """Return list of keys in database"""
+    def keys(self, like: str = "%"):
+        """Return list of keys in database with the given pattern
+
+        Args:
+            like (``str``, *optional*):
+                SQLite LIKE operator. Defaults to ``%`` (all keys).
+
+        """
         raise NotImplementedError
 
     def flush(self):

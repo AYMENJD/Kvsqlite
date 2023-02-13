@@ -111,8 +111,10 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.EXISTS, key=key)
 
-    def keys(self) -> Union[List[Tuple[str]], None]:
-        return self.__invoke(request=REQUEST.KEYS)
+    def keys(self, like: str = "%") -> Union[List[Tuple[str]], None]:
+        assert isinstance(like, str), "like must be str"
+
+        return self.__invoke(request=REQUEST.KEYS, value=like)
 
     def flush(self) -> bool:
         return self.__invoke(request=REQUEST.FLUSH_DB)

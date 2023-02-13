@@ -129,7 +129,10 @@ class Sqlite:
         elif request == REQUEST.KEYS:
             try:
                 query = self.__connection.execute(
-                    'SELECT k FROM "{}" ORDER BY rowid'.format(self.table_name)
+                    'SELECT k FROM "{}" WHERE k LIKE ? ORDER BY rowid'.format(
+                        self.table_name
+                    ),
+                    (value,),
                 ).fetchall()
                 if query:
                     return query
@@ -170,6 +173,7 @@ class Sqlite:
             else:
                 connection = sqlite3.connect(self.database, check_same_thread=False)
 
+            # connection.row_factory = sqlite3.Row
             logger.info("Connected to {}".format(self.database))
         except Exception as e:
             logger.exception(
