@@ -1,0 +1,4 @@
+include README.md LICENSE
+recursive-include kvsqlite *.py
+recursive-include test *.py
+recursive-include benchmark *.py

@@ -25,7 +25,7 @@ setup(
         "Tracker": "https://github.com/AYMENJD/kvsqlite/issues",
         "Documentation": "https://kvsqlite.rtfd.io/",
     },
-    packages=find_packages(exclude=["docs", "test", "benchmark"]),
+    packages=find_packages(exclude=["docs"]),
     keywords=[
         "asyncio",
         "sqlite",
