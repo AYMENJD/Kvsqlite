@@ -9,7 +9,7 @@ Features
 
 - Fast and easy-to-use database
 - Simultaneously **asynchronous** or **synchronous** calls
-- Store any data supported by [**pickle**](https://docs.python.org/3/library/pickle.html)
+- Store any data supported by [pickle](https://docs.python.org/3/library/pickle.html)
 
 Installation
 ------------
@@ -30,7 +30,8 @@ Usage
 
 .. code-block:: python
 
-   import kvsqlite, asyncio
+   from kvsqlite import Client # For sync version do: from kvsqlite.sync import Client
+   import asyncio
 
    async def main():
       async with kvsqlite.Client("kv.sqlite") as db:
