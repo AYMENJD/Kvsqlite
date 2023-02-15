@@ -3,20 +3,20 @@ import logging
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
+from sys import version_info
 
 logger = logging.getLogger(__name__)
 
 
 class REQUEST:
-    GET = "get"
-    SET = "set"
-    DELETE = "delete"
-    COMMIT = "commit"
-    EXISTS = "exists"
-    KEYS = "keys"
-    EXECUTE = "execute"
+    GET = "GET"
+    SET = "SET"
+    DELETE = "DELETE"
+    COMMIT = "COMMIT"
+    EXISTS = "EXISTS"
+    KEYS = "KEYS"
     FLUSH_DB = "FLUSH_DB"
-    CLOSE = "close"
+    CLOSE = "CLOSE"
 
 
 TABLE_STATEMENT = (
@@ -61,6 +61,8 @@ class Sqlite:
             raise RuntimeError("Database is closed")
 
         logger.debug("Request={}, key={}".format(request, key))
+
+        # TODO: Simplify request handlers
 
         if request == REQUEST.GET:
             try:
@@ -113,18 +115,16 @@ class Sqlite:
         elif request == REQUEST.EXISTS:
             try:
                 query = self.__connection.execute(
-                    'SELECT EXISTS(SELECT k FROM "{}" WHERE k = ?)'.format(
-                        self.table_name
-                    ),
+                    'SELECT k FROM "{}" WHERE k = ?'.format(self.table_name),
                     (key,),
                 ).fetchone()
 
                 if query:
-                    return bool(query[0])
+                    return True
                 else:
                     return False
             except Exception as e:
-                logger.exception("SELECT EXISTS statment error")
+                logger.exception("EXISTS error")
                 raise e
         elif request == REQUEST.KEYS:
             try:
@@ -157,7 +157,12 @@ class Sqlite:
                         self.__connection.execute("PRAGMA optimize")
                     self.__connection.close()
                     logger.info("Connection to {} closed".format(self.database))
-                    self.__workers.shutdown(False, cancel_futures=True)
+
+                    if version_info.minor > 8:
+                        self.__workers.shutdown(False, cancel_futures=True)
+                    else:
+                        self.__workers.shutdown(False)
+
                     self.is_running = False
                     return True
                 except Exception as e:

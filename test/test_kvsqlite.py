@@ -86,7 +86,7 @@ async def test_in_memory_key_value():
 @pytest.mark.asyncio
 async def test_concurrent_get():
 
-    async with kvsqlite.Client("test_kvsqlite.sqlite") as db:
+    async with kvsqlite.Client("test_kvsqlite.sqlite", workers=5) as db:
         keys = []
 
         for _ in range(100):
@@ -128,7 +128,7 @@ async def test_in_memory_concurrent_get():
 @pytest.mark.asyncio
 async def test_concurrent_set():
 
-    async with kvsqlite.Client("test_kvsqlite.sqlite") as db:
+    async with kvsqlite.Client("test_kvsqlite.sqlite", workers=5) as db:
 
         futures = await asyncio.gather(
             *[

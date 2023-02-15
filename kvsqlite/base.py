@@ -17,6 +17,9 @@ class BaseClient:
 
             value (``Any``):
                 The value to set for ``key``.
+
+        Returns:
+            :py:class:`bool`: ``True`` on success.
         """
         raise NotImplementedError
 
@@ -25,7 +28,7 @@ class BaseClient:
 
         Args:
             key (``str``):
-                The key to get.
+                The key to delete.
         """
         raise NotImplementedError
 
@@ -56,18 +59,31 @@ class BaseClient:
             like (``str``, *optional*):
                 SQLite LIKE operator. Defaults to ``%`` (all keys).
 
+        Returns:
+            :py:class:`list`:
+                A list of :py:class:`Tuple` contains keys.
+
+            :py:class:`None`:
+                If there is no keys to return.
         """
         raise NotImplementedError
 
     def flush(self):
-        """Flush the current database"""
+        """Flush and remove everything from the current database
+
+        Returns:
+            :py:class:`bool`: ``True`` on success.
+        """
         raise NotImplementedError
 
     def close(self, optimize_database: bool = True):
-        """Close database
+        """Close database connection
 
         Args:
             optimize_database (``bool``, **optional**):
                 Whether optimize database before closing or not. Defaults to ``True``.
+
+        Returns:
+            :py:class:`bool`: ``True`` on success.
         """
         raise NotImplementedError

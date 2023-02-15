@@ -23,7 +23,7 @@ pip install git+https://github.com/AYMENJD/Kvsqlite
 
 ### Documentation
 
-[Kvsqlite](https://github.com/AYMENJD/Kvsqlite) documentation available at https://kvsqlite.rtfd.io/.
+[Kvsqlite](https://github.com/AYMENJD/Kvsqlite) documentation available at [kvsqlite.rtfd.io](https://kvsqlite.rtfd.io/).
 
 ### Usage
 
