@@ -52,6 +52,21 @@ class BaseClient:
         """
         raise NotImplementedError
 
+    def rename(self, key: str, new_key: str):
+        """Rename ``key`` with ``new_key``
+
+        Args:
+            key (``str``):
+                The key to rename.
+
+            new_key (``str``):
+                The key to rename with.
+
+        Returns:
+            :py:class:`bool`: ``True`` if renamed, otherwise ``False``.
+        """
+        raise NotImplementedError
+
     def keys(self, like: str = "%"):
         """Return list of keys in database with the given pattern
 

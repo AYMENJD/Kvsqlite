@@ -125,6 +125,13 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.EXISTS, key=key)
         return await future
 
+    async def rename(self, key: str, new_key: str) -> bool:
+        assert isinstance(key, str), "key must be str"
+        assert isinstance(new_key, str), "new_key must be str"
+
+        future = self.__invoke(request=REQUEST.RENAME, key=key, value=new_key)
+        return await future
+
     async def keys(self, like: str = "%") -> Union[List[Tuple[str]], None]:
         assert isinstance(like, str), "like must be str"
 

@@ -14,6 +14,7 @@ class REQUEST:
     DELETE = "DELETE"
     COMMIT = "COMMIT"
     EXISTS = "EXISTS"
+    RENAME = "RENAME"
     KEYS = "KEYS"
     FLUSH_DB = "FLUSH_DB"
     CLOSE = "CLOSE"
@@ -125,6 +126,22 @@ class Sqlite:
                     return False
             except Exception as e:
                 logger.exception("EXISTS error")
+                raise e
+        elif request == REQUEST.RENAME:
+            try:
+                query = self.__connection.execute(
+                    'UPDATE OR IGNORE "{}" SET k = ? WHERE k = ?'.format(
+                        self.table_name
+                    ),
+                    (value, key),
+                )
+
+                if query.rowcount > 0:
+                    return True
+                else:
+                    return False
+            except Exception as e:
+                logger.exception("RENAME KEY error")
                 raise e
         elif request == REQUEST.KEYS:
             try:
