@@ -284,6 +284,51 @@ async def benchmark_concurrent_get(db, keys):
     print()
 
 
+async def benchmark_no_auto_commit_set(db, keys):
+    print(PINK, "========Benchmark set no autocommit==========", ENDC)
+    timeing = 0
+    start = time.perf_counter()
+    start_memory = psutil.Process(os.getpid()).memory_info().rss
+    print(
+        WARNING,
+        "-> Started with memory usage:",
+        ENDC,
+        start_memory,
+    )
+    for k, v in keys:
+        latncey_start = time.perf_counter()
+        await db.set(k, v)
+        timeing += time.perf_counter() - latncey_start
+    await db.commit()
+    end_memory = psutil.Process(os.getpid()).memory_info().rss
+    took = time.perf_counter() - start
+    print(
+        WARNING,
+        "-> {} query took:{} {}".format(args.query_count, ENDC, took),
+    )
+    print(
+        WARNING,
+        "-> QRS:",
+        ENDC,
+        int(args.query_count / took),
+    )
+    print(
+        WARNING,
+        "-> Average latancey:",
+        ENDC,
+        timeing / args.query_count,
+    )
+    print(
+        WARNING,
+        "-> Current memory usage:{} {} ({}+{}{})".format(
+            ENDC, end_memory, GREEN, (end_memory - start_memory), ENDC
+        ),
+        ENDC,
+    )
+    print(GREEN, "================Benchmark end================", ENDC)
+    print()
+
+
 async def main():
 
     keys = []
@@ -302,6 +347,10 @@ async def main():
         await benchmark_exists(db, keys)
         await benchmark_delete(db, keys)
 
+        await db.flush()
+
+    async with kvsqlite.Client(args.db_path, autocommit=False) as db:
+        await benchmark_no_auto_commit_set(db, keys)
         await db.flush()
 
     async with kvsqlite.Client(args.db_path, workers=5) as db:
