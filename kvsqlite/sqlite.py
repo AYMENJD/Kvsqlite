@@ -163,12 +163,13 @@ class Sqlite:
                 raise e
 
     def __commit(self):
-        try:
-            self.__connection.commit()
-            return True
-        except Exception as e:
-            logger.exception("COMMIT error")
-            raise e
+        with self.__lock:
+            try:
+                self.__connection.commit()
+                return True
+            except Exception as e:
+                logger.exception("COMMIT error")
+                raise e
 
     def __exists(self, key: str):
         try:
