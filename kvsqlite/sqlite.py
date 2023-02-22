@@ -76,7 +76,7 @@ class Sqlite:
         elif request == REQUEST.RENAME:
             return self.__rename(key, value)
         elif request == REQUEST.KEYS:
-            return self.__keys(key)
+            return self.__keys(value)
         elif request == REQUEST.FLUSH_DB:
             return self.__flush_db()
         elif request == REQUEST.CLOSE:
