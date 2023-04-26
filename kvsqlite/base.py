@@ -23,18 +23,18 @@ class BaseClient:
         """
         raise NotImplementedError
 
-    def setex(self, key: str, value, ttl: int):
+    def setex(self, key: str, ttl: int, value):
         """Set the value of ``key`` with a timeout specified by ``ttl``
 
         Args:
             key (``str``):
                 The key
 
-            value (``Any``):
-                The value to set for ``key``
-
             ttl (``int``):
                 The number of seconds for ``key`` timeout (a.k.a ``key`` lifetime)
+
+            value (``Any``):
+                The value to set for ``key``
 
         .. warning::
             Timeouted keys aren't deleted by default, you must call :func:`cleanex` from time to time

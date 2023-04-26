@@ -98,7 +98,7 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.SET, key=key, value=value)
 
-    def setex(self, key: str, value, ttl: int) -> bool:
+    def setex(self, key: str, ttl: int, value) -> bool:
         assert isinstance(key, str), "key must be str"
         assert ttl >= 1, "ttl must be greater than 1"
 

@@ -109,7 +109,7 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.SET, key=key, value=value)
         return await future
 
-    async def setex(self, key: str, value, ttl: int) -> bool:
+    async def setex(self, key: str, ttl: int, value) -> bool:
         assert isinstance(key, str), "key must be str"
         assert ttl >= 1, "ttl must be greater than 1"
 
