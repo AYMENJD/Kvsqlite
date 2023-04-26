@@ -1,6 +1,3 @@
-import kvsqlite
-
-
 class BaseClient:
     def get(self, key: str):
         """Get the value of ``key``
@@ -40,7 +37,7 @@ class BaseClient:
                 The number of seconds for ``key`` timeout (a.k.a ``key`` lifetime)
 
         .. warning::
-            Timeouted keys aren't deleted by default, you must call :func:`~kvsqlite.BaseClient.cleanex` for time to time
+            Timeouted keys aren't deleted by default, you must call :func:`cleanex` from time to time
 
         Returns:
             :py:class:`bool`: ``True`` on success
