@@ -25,9 +25,6 @@ class REQUEST:
     CLOSE = "CLOSE"
 
 
-TABLE_STATEMENT = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'
-
-
 class Sqlite:
     def __init__(
         self,
@@ -56,6 +53,45 @@ class Sqlite:
         self.__lock = Lock()
 
         self.is_running = True
+
+        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'.format(
+            self.table_name
+        )
+        self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?)'.format(
+            self.table_name
+        )
+        self.__set_statement = (
+            'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,NULL)'.format(
+                self.table_name
+            )
+        )
+        self.__setex_statement = (
+            'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,?)'.format(
+                self.table_name
+            )
+        )
+        self.__delete_statement = 'DELETE FROM "{}" WHERE k = ?'.format(self.table_name)
+        self.__exists_statement = 'SELECT k FROM "{}" WHERE k = ?'.format(
+            self.table_name
+        )
+        self.__ttl_statement = (
+            'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ?'.format(
+                self.table_name
+            )
+        )
+        self.__expire_statement = 'UPDATE "{}" SET expire_time = ? WHERE k = ?'.format(
+            self.table_name
+        )
+        self.__rename_statement = 'UPDATE OR IGNORE "{}" SET k = ? WHERE k = ?'.format(
+            self.table_name
+        )
+        self.__keys_statement = (
+            'SELECT k FROM "{}" WHERE k LIKE ? ORDER BY rowid'.format(self.table_name)
+        )
+        self.__cleanex_statement = 'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
+            self.table_name
+        )
+        self.__flush_db_statement = 'DROP TABLE "{}"'.format(self.table_name)
 
     def request(self, request, key: str = None, value=None):
         return self.__workers.submit(self.procces_request, request, key, value)
@@ -130,9 +166,7 @@ class Sqlite:
     def __get(self, key: str):
         try:
             query = self.__connection.execute(
-                'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?)'.format(
-                    self.table_name
-                ),
+                self.__get_statement,
                 (key, time()),
             ).fetchone()
             if query:
@@ -147,9 +181,7 @@ class Sqlite:
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,NULL)'.format(
-                        self.table_name
-                    ),
+                    self.__set_statement,
                     (key, self.__encoder.encode(value)),
                 )
                 if query.rowcount > 0:
@@ -164,9 +196,7 @@ class Sqlite:
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,?)'.format(
-                        self.table_name
-                    ),
+                    self.__setex_statement,
                     (key, self.__encoder.encode(value[0]), time() + value[1]),
                 )
                 if query.rowcount > 0:
@@ -181,7 +211,7 @@ class Sqlite:
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'DELETE FROM "{}" WHERE k = ?'.format(self.table_name),
+                    self.__delete_statement,
                     (key,),
                 )
                 if query.rowcount > 0:
@@ -204,7 +234,7 @@ class Sqlite:
     def __exists(self, key: str):
         try:
             query = self.__connection.execute(
-                'SELECT k FROM "{}" WHERE k = ?'.format(self.table_name),
+                self.__exists_statement,
                 (key,),
             ).fetchone()
 
@@ -219,9 +249,7 @@ class Sqlite:
     def __ttl(self, key: str):
         try:
             query = self.__connection.execute(
-                'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ?'.format(
-                    self.table_name
-                ),
+                self.__ttl_statement,
                 (key, time()),
             ).fetchone()
 
@@ -237,9 +265,7 @@ class Sqlite:
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'UPDATE "{}" SET expire_time = ? WHERE k = ?'.format(
-                        self.table_name
-                    ),
+                    self.__expire_statement,
                     (time() + ttl, key),
                 )
 
@@ -254,7 +280,7 @@ class Sqlite:
     def __rename(self, key: str, new_key: str):
         try:
             query = self.__connection.execute(
-                'UPDATE OR IGNORE "{}" SET k = ? WHERE k = ?'.format(self.table_name),
+                self.__rename_statement,
                 (new_key, key),
             )
 
@@ -269,9 +295,7 @@ class Sqlite:
     def __keys(self, like: str):
         try:
             query = self.__connection.execute(
-                'SELECT k FROM "{}" WHERE k LIKE ? ORDER BY rowid'.format(
-                    self.table_name
-                ),
+                self.__keys_statement,
                 (like,),
             ).fetchall()
             if query:
@@ -286,9 +310,7 @@ class Sqlite:
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
-                        self.table_name
-                    ),
+                    self.__cleanex_statement,
                     (time(),),
                 )
 
@@ -300,8 +322,8 @@ class Sqlite:
     def __flush_db(self):
         with self.__lock:
             try:
-                self.__connection.execute('DROP TABLE "{}"'.format(self.table_name))
-                self.__connection.execute(TABLE_STATEMENT.format(self.table_name))
+                self.__connection.execute(self.__flush_db_statement)
+                self.__connection.execute(self.__table_statement)
                 return True
             except Exception as e:
                 logger.exception("FLUSH_DB command exception")
@@ -350,6 +372,6 @@ class Sqlite:
                     )
             else:
 
-                connection.execute(TABLE_STATEMENT.format(self.table_name))
+                connection.execute(self.__table_statement)
         except Exception:
             logger.exception("Check table error")
