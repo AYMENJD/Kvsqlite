@@ -80,6 +80,50 @@ async def benchmark_set(db, keys):
     print()
 
 
+async def benchmark_setex(db, keys):
+    print(PINK, "================Benchmark setex================", ENDC)
+    timeing = 0
+    start = time.perf_counter()
+    start_memory = psutil.Process(os.getpid()).memory_info().rss
+    print(
+        WARNING,
+        "-> Started with memory usage:",
+        ENDC,
+        start_memory,
+    )
+    for k, v in keys:
+        latncey_start = time.perf_counter()
+        await db.setex(k, v, 60)
+        timeing += time.perf_counter() - latncey_start
+    end_memory = psutil.Process(os.getpid()).memory_info().rss
+    took = time.perf_counter() - start
+    print(
+        WARNING,
+        "-> {} query took:{} {}".format(args.query_count, ENDC, took),
+    )
+    print(
+        WARNING,
+        "-> QRS:",
+        ENDC,
+        int(args.query_count / took),
+    )
+    print(
+        WARNING,
+        "-> Average latancey:",
+        ENDC,
+        timeing / args.query_count,
+    )
+    print(
+        WARNING,
+        "-> Current memory usage:{} {} ({}+{}{})".format(
+            ENDC, end_memory, GREEN, (end_memory - start_memory), ENDC
+        ),
+        ENDC,
+    )
+    print(GREEN, "================Benchmark end================", ENDC)
+    print()
+
+
 async def benchmark_get(db, keys):
     print(PINK, "================Benchmark get================", ENDC)
     timeing = 0
@@ -138,6 +182,94 @@ async def benchmark_exists(db, keys):
     for k, v in keys:
         latncey_start = time.perf_counter()
         await db.exists(k)
+        timeing += time.perf_counter() - latncey_start
+    end_memory = psutil.Process(os.getpid()).memory_info().rss
+    took = time.perf_counter() - start
+    print(
+        WARNING,
+        "-> {} query took:{} {}".format(args.query_count, ENDC, took),
+    )
+    print(
+        WARNING,
+        "-> QRS:",
+        ENDC,
+        int(args.query_count / took),
+    )
+    print(
+        WARNING,
+        "-> Average latancey:",
+        ENDC,
+        timeing / args.query_count,
+    )
+    print(
+        WARNING,
+        "-> Current memory usage:{} {} ({}+{}{})".format(
+            ENDC, end_memory, GREEN, (end_memory - start_memory), ENDC
+        ),
+        ENDC,
+    )
+    print(GREEN, "================Benchmark end================", ENDC)
+    print()
+
+
+async def benchmark_ttl(db, keys):
+    print(PINK, "================Benchmark ttl=============", ENDC)
+    timeing = 0
+    start = time.perf_counter()
+    start_memory = psutil.Process(os.getpid()).memory_info().rss
+    print(
+        WARNING,
+        "-> Started with memory usage:",
+        ENDC,
+        start_memory,
+    )
+    for k, v in keys:
+        latncey_start = time.perf_counter()
+        await db.ttl(k)
+        timeing += time.perf_counter() - latncey_start
+    end_memory = psutil.Process(os.getpid()).memory_info().rss
+    took = time.perf_counter() - start
+    print(
+        WARNING,
+        "-> {} query took:{} {}".format(args.query_count, ENDC, took),
+    )
+    print(
+        WARNING,
+        "-> QRS:",
+        ENDC,
+        int(args.query_count / took),
+    )
+    print(
+        WARNING,
+        "-> Average latancey:",
+        ENDC,
+        timeing / args.query_count,
+    )
+    print(
+        WARNING,
+        "-> Current memory usage:{} {} ({}+{}{})".format(
+            ENDC, end_memory, GREEN, (end_memory - start_memory), ENDC
+        ),
+        ENDC,
+    )
+    print(GREEN, "================Benchmark end================", ENDC)
+    print()
+
+
+async def benchmark_expire(db, keys):
+    print(PINK, "================Benchmark expire=============", ENDC)
+    timeing = 0
+    start = time.perf_counter()
+    start_memory = psutil.Process(os.getpid()).memory_info().rss
+    print(
+        WARNING,
+        "-> Started with memory usage:",
+        ENDC,
+        start_memory,
+    )
+    for k, v in keys:
+        latncey_start = time.perf_counter()
+        await db.expire(k, 30)
         timeing += time.perf_counter() - latncey_start
     end_memory = psutil.Process(os.getpid()).memory_info().rss
     took = time.perf_counter() - start
@@ -346,6 +478,14 @@ async def main():
         await benchmark_get(db, keys)
         await benchmark_exists(db, keys)
         await benchmark_delete(db, keys)
+
+        await db.flush()
+
+    async with kvsqlite.Client(args.db_path) as db:
+        await benchmark_setex(db, keys)
+        await benchmark_get(db, keys)
+        await benchmark_ttl(db, keys)
+        await benchmark_expire(db, keys)
 
         await db.flush()
 

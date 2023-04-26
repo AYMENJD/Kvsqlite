@@ -98,6 +98,12 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.SET, key=key, value=value)
 
+    def setex(self, key: str, value, ttl: int) -> bool:
+        assert isinstance(key, str), "key must be str"
+        assert ttl >= 1, "ttl must be greater than 1"
+
+        return self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
+
     def delete(self, key: str) -> bool:
         assert isinstance(key, str), "key must be str"
 
@@ -111,6 +117,17 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.EXISTS, key=key)
 
+    def ttl(self, key: str) -> float:
+        assert isinstance(key, str), "key must be str"
+
+        return self.__invoke(request=REQUEST.TTL, key=key)
+
+    def expire(self, key: str, ttl: int) -> bool:
+        assert isinstance(key, str), "key must be str"
+        assert ttl >= 1, "ttl must be greater than 1"
+
+        return self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl)
+
     def rename(self, key: str, new_key: str) -> bool:
         assert isinstance(key, str), "key must be str"
         assert isinstance(new_key, str), "new_key must be str"
@@ -121,6 +138,9 @@ class Client(BaseClient):
         assert isinstance(like, str), "like must be str"
 
         return self.__invoke(request=REQUEST.KEYS, value=like)
+
+    def cleanex(self) -> int:
+        return self.__invoke(request=REQUEST.CLEAN_EX)
 
     def flush(self) -> bool:
         return self.__invoke(request=REQUEST.FLUSH_DB)

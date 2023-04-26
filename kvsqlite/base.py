@@ -1,25 +1,49 @@
+import kvsqlite
+
+
 class BaseClient:
     def get(self, key: str):
         """Get the value of ``key``
 
         Args:
             key (``str``):
-                The key to get.
+                The key to get
         """
         raise NotImplementedError
 
     def set(self, key: str, value):
-        """Get the value of ``key``
+        """Set the value of ``key``
 
         Args:
             key (``str``):
-                The key.
+                The key
 
             value (``Any``):
-                The value to set for ``key``.
+                The value to set for ``key``
 
         Returns:
-            :py:class:`bool`: ``True`` on success.
+            :py:class:`bool`: ``True`` on success
+        """
+        raise NotImplementedError
+
+    def setex(self, key: str, value, ttl: int):
+        """Set the value of ``key`` with a timeout specified by ``ttl``
+
+        Args:
+            key (``str``):
+                The key
+
+            value (``Any``):
+                The value to set for ``key``
+
+            ttl (``int``):
+                The number of seconds for ``key`` timeout (a.k.a ``key`` lifetime)
+
+        .. warning::
+            Timeouted keys aren't deleted by default, you must call :func:`~kvsqlite.BaseClient.cleanex` for time to time
+
+        Returns:
+            :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError
 
@@ -28,7 +52,7 @@ class BaseClient:
 
         Args:
             key (``str``):
-                The key to delete.
+                The key to delete
         """
         raise NotImplementedError
 
@@ -36,7 +60,7 @@ class BaseClient:
         """Commit the current changes
 
         Returns:
-            :py:class:`bool`: ``True`` on success.
+            :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError
 
@@ -45,10 +69,37 @@ class BaseClient:
 
         Args:
             key (``str``):
-                The key to search for.
+                The key to search for
 
         Returns:
-            :py:class:`bool`: ``True`` if found, otherwise ``False``.
+            :py:class:`bool`: ``True`` if found, otherwise ``False``
+        """
+        raise NotImplementedError
+
+    def ttl(self, key: str):
+        """Returns the remaining time to live of a ``key`` that has a timeout
+
+        Args:
+            key (``str``):
+                The key
+
+        Returns:
+            :py:class:`float`: The remaining time, otherwise ``0``
+        """
+        raise NotImplementedError
+
+    def expire(self, key: str, ttl: int):
+        """Set a timeout on ``key``
+
+        Args:
+            key (``str``):
+                The key
+
+            ttl (``int``):
+                The number of seconds for ``key`` timeout (a.k.a ``key`` lifetime)
+
+        Returns:
+            :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError
 
@@ -57,13 +108,13 @@ class BaseClient:
 
         Args:
             key (``str``):
-                The key to rename.
+                The key to rename
 
             new_key (``str``):
-                The key to rename with.
+                The key to rename with
 
         Returns:
-            :py:class:`bool`: ``True`` if renamed, otherwise ``False``.
+            :py:class:`bool`: ``True`` if renamed, otherwise ``False``
         """
         raise NotImplementedError
 
@@ -72,14 +123,22 @@ class BaseClient:
 
         Args:
             like (``str``, *optional*):
-                SQLite LIKE operator. Defaults to ``%`` (all keys).
+                SQLite LIKE operator. Defaults to ``%`` (all keys)
 
         Returns:
             :py:class:`list`:
-                A list of :py:class:`Tuple` contains keys.
+                A list of :py:class:`Tuple` contains keys
 
             :py:class:`None`:
-                If there is no keys to return.
+                If there is no keys to return
+        """
+        raise NotImplementedError
+
+    def cleanex(self):
+        """Removes all expired keys from database. This reduces disk usage
+
+        Returns:
+            :py:class:`int`: Number of deleted keys
         """
         raise NotImplementedError
 
@@ -87,7 +146,7 @@ class BaseClient:
         """Flush and remove everything from the current database
 
         Returns:
-            :py:class:`bool`: ``True`` on success.
+            :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError
 
@@ -96,9 +155,9 @@ class BaseClient:
 
         Args:
             optimize_database (``bool``, **optional**):
-                Whether optimize database before closing or not. Defaults to ``True``.
+                Whether optimize database before closing or not. Defaults to ``True``
 
         Returns:
-            :py:class:`bool`: ``True`` on success.
+            :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError

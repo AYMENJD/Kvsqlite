@@ -109,6 +109,13 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.SET, key=key, value=value)
         return await future
 
+    async def setex(self, key: str, value, ttl: int) -> bool:
+        assert isinstance(key, str), "key must be str"
+        assert ttl >= 1, "ttl must be greater than 1"
+
+        future = self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
+        return await future
+
     async def delete(self, key: str) -> bool:
         assert isinstance(key, str), "key must be str"
 
@@ -125,6 +132,19 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.EXISTS, key=key)
         return await future
 
+    async def ttl(self, key: str) -> float:
+        assert isinstance(key, str), "key must be str"
+
+        future = self.__invoke(request=REQUEST.TTL, key=key)
+        return await future
+
+    async def expire(self, key: str, ttl: int) -> bool:
+        assert isinstance(key, str), "key must be str"
+        assert ttl >= 1, "ttl must be greater than 1"
+
+        future = self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl)
+        return await future
+
     async def rename(self, key: str, new_key: str) -> bool:
         assert isinstance(key, str), "key must be str"
         assert isinstance(new_key, str), "new_key must be str"
@@ -136,6 +156,10 @@ class Client(BaseClient):
         assert isinstance(like, str), "like must be str"
 
         future = self.__invoke(request=REQUEST.KEYS, value=like)
+        return await future
+
+    async def cleanex(self) -> int:
+        future = self.__invoke(request=REQUEST.CLEAN_EX)
         return await future
 
     async def flush(self) -> bool:

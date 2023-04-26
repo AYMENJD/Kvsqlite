@@ -43,6 +43,10 @@ async def main():
             print(get_key) # Hello world. Bye!
 
             await db.delete(key)
+
+            await db.setex(key, "This key has a lifetime of 60 seconds", 60)
+
+            print(await db.get(key))
         else:
             print("Key not found", result)
 

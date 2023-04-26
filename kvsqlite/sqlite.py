@@ -4,6 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from sys import version_info
+from time import time
 
 logger = logging.getLogger(__name__)
 
@@ -11,18 +12,20 @@ logger = logging.getLogger(__name__)
 class REQUEST:
     GET = "GET"
     SET = "SET"
+    SETEX = "SETEX"
     DELETE = "DELETE"
     COMMIT = "COMMIT"
     EXISTS = "EXISTS"
+    TTL = "TTL"
+    EXPIRE = "EXPIRE"
     RENAME = "RENAME"
     KEYS = "KEYS"
+    CLEAN_EX = "CLEAN_EX"
     FLUSH_DB = "FLUSH_DB"
     CLOSE = "CLOSE"
 
 
-TABLE_STATEMENT = (
-    'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB)'
-)
+TABLE_STATEMENT = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'
 
 
 class Sqlite:
@@ -67,16 +70,24 @@ class Sqlite:
             return self.__get(key)
         elif request == REQUEST.SET:
             return self.__set(key, value)
+        elif request == REQUEST.SETEX:
+            return self.__setex(key, value)
         elif request == REQUEST.DELETE:
             return self.__delete(key)
         elif request == REQUEST.COMMIT:
             return self.__commit()
         elif request == REQUEST.EXISTS:
             return self.__exists(key)
+        elif request == REQUEST.TTL:
+            return self.__ttl(key)
+        elif request == REQUEST.EXPIRE:
+            return self.__expire(key, value)
         elif request == REQUEST.RENAME:
             return self.__rename(key, value)
         elif request == REQUEST.KEYS:
             return self.__keys(value)
+        elif request == REQUEST.CLEAN_EX:
+            return self.__clean_ex()
         elif request == REQUEST.FLUSH_DB:
             return self.__flush_db()
         elif request == REQUEST.CLOSE:
@@ -97,9 +108,7 @@ class Sqlite:
             logger.info("Connected to {}".format(self.database))
         except Exception as e:
             logger.exception(
-                "Error while opening sqlite3 self.__connection for database: {}".format(
-                    self.database
-                )
+                "Error while opening sqlite3 for database: {}".format(self.database)
             )
             raise e
 
@@ -111,9 +120,9 @@ class Sqlite:
             raise e
 
         try:
-            connection.execute(TABLE_STATEMENT.format(self.table_name))
+            self.__check_table(connection)
         except Exception as e:
-            logger.exception("Error while executing CREATE TABLE statement")
+            logger.exception("Error while checking table")
             raise e
 
         return connection
@@ -121,22 +130,26 @@ class Sqlite:
     def __get(self, key: str):
         try:
             query = self.__connection.execute(
-                'SELECT v FROM "{}" WHERE k = ?'.format(self.table_name),
-                (key,),
+                'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?)'.format(
+                    self.table_name
+                ),
+                (key, time()),
             ).fetchone()
             if query:
                 return self.__encoder.decode(query[0])
             else:
                 return None
         except Exception as e:
-            logger.exception("SELECT statment error")
+            logger.exception("GET command exception")
             raise e
 
     def __set(self, key: str, value):
         with self.__lock:
             try:
                 query = self.__connection.execute(
-                    'REPLACE INTO "{}" (k, v) VALUES(?,?)'.format(self.table_name),
+                    'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,NULL)'.format(
+                        self.table_name
+                    ),
                     (key, self.__encoder.encode(value)),
                 )
                 if query.rowcount > 0:
@@ -144,7 +157,24 @@ class Sqlite:
                 else:
                     return False
             except Exception as e:
-                logger.exception("REPLACE INTO statment error")
+                logger.exception("SET command exception")
+                raise e
+
+    def __setex(self, key: str, value):
+        with self.__lock:
+            try:
+                query = self.__connection.execute(
+                    'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,?)'.format(
+                        self.table_name
+                    ),
+                    (key, self.__encoder.encode(value[0]), time() + value[1]),
+                )
+                if query.rowcount > 0:
+                    return True
+                else:
+                    return False
+            except Exception as e:
+                logger.exception("SETEX command exception")
                 raise e
 
     def __delete(self, key: str):
@@ -159,7 +189,7 @@ class Sqlite:
                 else:
                     return False
             except Exception as e:
-                logger.exception("DELETE statment error")
+                logger.exception("DELETE command exception")
                 raise e
 
     def __commit(self):
@@ -168,7 +198,7 @@ class Sqlite:
                 self.__connection.commit()
                 return True
             except Exception as e:
-                logger.exception("COMMIT error")
+                logger.exception("COMMIT command exception")
                 raise e
 
     def __exists(self, key: str):
@@ -183,8 +213,43 @@ class Sqlite:
             else:
                 return False
         except Exception as e:
-            logger.exception("EXISTS error")
+            logger.exception("EXISTS command exception")
             raise e
+
+    def __ttl(self, key: str):
+        try:
+            query = self.__connection.execute(
+                'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ?'.format(
+                    self.table_name
+                ),
+                (key, time()),
+            ).fetchone()
+
+            if query:
+                return query[0] - time()
+            else:
+                return 0
+        except Exception as e:
+            logger.exception("TTL command exception")
+            raise e
+
+    def __expire(self, key: str, ttl: int):
+        with self.__lock:
+            try:
+                query = self.__connection.execute(
+                    'UPDATE "{}" SET expire_time = ? WHERE k = ?'.format(
+                        self.table_name
+                    ),
+                    (time() + ttl, key),
+                )
+
+                if query.rowcount > 0:
+                    return True
+                else:
+                    return False
+            except Exception as e:
+                logger.exception("EXPIRE command exception")
+                raise e
 
     def __rename(self, key: str, new_key: str):
         try:
@@ -198,7 +263,7 @@ class Sqlite:
             else:
                 return False
         except Exception as e:
-            logger.exception("RENAME KEY error")
+            logger.exception("RENAME command exception")
             raise e
 
     def __keys(self, like: str):
@@ -214,8 +279,23 @@ class Sqlite:
             else:
                 return None
         except Exception as e:
-            logger.exception("SELECT KEYS statment error")
+            logger.exception("KEYS command exception")
             raise e
+
+    def __clean_ex(self):
+        with self.__lock:
+            try:
+                query = self.__connection.execute(
+                    'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
+                        self.table_name
+                    ),
+                    (time(),),
+                )
+
+                return query.rowcount
+            except Exception as e:
+                logger.exception("CLEAN_EX command exception")
+                raise e
 
     def __flush_db(self):
         with self.__lock:
@@ -224,7 +304,7 @@ class Sqlite:
                 self.__connection.execute(TABLE_STATEMENT.format(self.table_name))
                 return True
             except Exception as e:
-                logger.exception("DROP TABLE statment error")
+                logger.exception("FLUSH_DB command exception")
                 raise e
 
     def __close(self, optimize: bool):
@@ -243,5 +323,33 @@ class Sqlite:
                 self.is_running = False
                 return True
             except Exception as e:
-                logger.exception("On close error")
+                logger.exception("CLOSE command exception")
                 raise e
+
+    def __check_table(self, connection: sqlite3.Connection):
+        try:
+            table_exists = (
+                connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (self.table_name,),
+                ).fetchone()
+                is not None
+            )
+
+            if table_exists:
+                query = connection.execute(
+                    "PRAGMA table_info({})".format((self.table_name))
+                )
+                columns = [row[1] for row in query.fetchall()]
+
+                if "expire_time" not in columns:
+                    connection.execute(
+                        "ALTER TABLE '{}' ADD COLUMN expire_time INTEGER DEFAULT NULL".format(
+                            self.table_name
+                        )
+                    )
+            else:
+
+                connection.execute(TABLE_STATEMENT.format(self.table_name))
+        except Exception:
+            logger.exception("Check table error")
