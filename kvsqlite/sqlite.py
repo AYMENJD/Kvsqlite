@@ -49,7 +49,6 @@ class Sqlite:
         self.synchronous = synchronous
         self.__encoder = encoder
         self.__workers = ThreadPoolExecutor(workers, "kvsqlite")
-        self.__connection: sqlite3.Connection = self.__connect()
         self.__lock = Lock()
 
         self.is_running = True
@@ -92,6 +91,8 @@ class Sqlite:
             self.table_name
         )
         self.__flush_db_statement = 'DROP TABLE "{}"'.format(self.table_name)
+
+        self.__connection: sqlite3.Connection = self.__connect()
 
     def request(self, request, key: str = None, value=None):
         return self.__workers.submit(self.procces_request, request, key, value)
@@ -371,7 +372,7 @@ class Sqlite:
                         )
                     )
             else:
-
                 connection.execute(self.__table_statement)
+
         except Exception:
             logger.exception("Check table error")
