@@ -46,7 +46,6 @@ async def main():
         else:
             print("Key not found", result)
 
-        await db.close()
 
 asyncio.run(main())
 ```
