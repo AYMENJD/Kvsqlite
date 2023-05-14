@@ -56,7 +56,7 @@ class Sqlite:
         self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'.format(
             self.table_name
         )
-        self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?)'.format(
+        self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
             self.table_name
         )
         self.__set_statement = (
@@ -70,13 +70,11 @@ class Sqlite:
             )
         )
         self.__delete_statement = 'DELETE FROM "{}" WHERE k = ?'.format(self.table_name)
-        self.__exists_statement = 'SELECT k FROM "{}" WHERE k = ?'.format(
+        self.__exists_statement = 'SELECT k FROM "{}" WHERE k = ? LIMIT 1'.format(
             self.table_name
         )
-        self.__ttl_statement = (
-            'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ?'.format(
-                self.table_name
-            )
+        self.__ttl_statement = 'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ? LIMIT 1'.format(
+            self.table_name
         )
         self.__expire_statement = 'UPDATE "{}" SET expire_time = ? WHERE k = ?'.format(
             self.table_name
