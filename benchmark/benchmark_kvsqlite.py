@@ -93,7 +93,7 @@ async def benchmark_setex(db, keys):
     )
     for k, v in keys:
         latncey_start = time.perf_counter()
-        await db.setex(k, v, 60)
+        await db.setex(k, 60, v)
         timeing += time.perf_counter() - latncey_start
     end_memory = psutil.Process(os.getpid()).memory_info().rss
     took = time.perf_counter() - start
