@@ -1,5 +1,5 @@
 # Kvsqlite [![version](https://img.shields.io/pypi/v/Kvsqlite?style=flat&logo=pypi)](https://pypi.org/project/Kvsqlite) [![Downloads](https://static.pepy.tech/personalized-badge/Kvsqlite?period=month&units=none&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/Kvsqlite)
-Easy, Sample and powerful key-value database backed by sqlite3.
+Easy, Simple and powerful key-value database backed by sqlite3.
 
 ### Features
 
