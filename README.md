@@ -1,4 +1,5 @@
 # Kvsqlite [![version](https://img.shields.io/pypi/v/Kvsqlite?style=flat&logo=pypi)](https://pypi.org/project/Kvsqlite) [![Downloads](https://static.pepy.tech/personalized-badge/Kvsqlite?period=month&units=none&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/Kvsqlite)
+
 Easy, Simple and powerful key-value database backed by sqlite3.
 
 ### Features
@@ -16,7 +17,9 @@ Easy, Simple and powerful key-value database backed by sqlite3.
 ```bash
 pip install kvsqlite
 ```
+
 From github (dev version)
+
 ```bash
 pip install git+https://github.com/AYMENJD/Kvsqlite
 ```
@@ -44,7 +47,7 @@ async def main():
 
             await db.delete(key)
 
-            await db.setex(key, "This key has a lifetime of 60 seconds", 60)
+            await db.setex(key, 60, "This key has a lifetime of 60 seconds")
 
             print(await db.get(key))
         else:
