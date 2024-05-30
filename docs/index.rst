@@ -7,8 +7,8 @@ Welcome to Kvsqlite
 Features
 --------
 
-- Fast and easy-to-use database.
-- Simultaneously **asynchronous** or **synchronous** calls.
+- Fast and easy-to-use database
+- Simultaneously **asynchronous** or **synchronous** calls
 - Store any data supported by `pickle <https://docs.python.org/3/library/pickle.html>`_
 
 Installation
