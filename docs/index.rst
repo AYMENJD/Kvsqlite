@@ -22,7 +22,7 @@ From github (dev version)
 
 .. code-block:: bash
 
-   pip install git+https://github.com/AYEMNJD/Kvsqlite
+   pip install git+https://github.com/AYMENJD/Kvsqlite
 
 
 Usage
