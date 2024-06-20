@@ -1,5 +1,5 @@
 __version__ = "0.2.1"
-__copyright__ = "Copyright (c) 2023 AYMEN Mohammed ~ https://github.com/AYMENJD"
+__copyright__ = f"Copyright (c) {__import__("datetime").datetime.now().year} AYMEN Mohammed ~ https://github.com/AYMENJD"
 __license__ = "MIT License"
 
 VERSION = __version__
