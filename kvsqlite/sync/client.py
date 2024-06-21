@@ -88,10 +88,16 @@ class Client(BaseClient):
         except Exception:
             logger.exception("Error on __exit__")
 
-    def get(self, key: str) -> Any:
+    def get(self, key: str, revoke: bool = False) -> Any:
         assert isinstance(key, str), "key must be str"
+        assert isinstance(revoke, bool), "revoke must be boolean"
 
-        return self.__invoke(request=REQUEST.GET, key=key)
+        r = self.__invoke(request=REQUEST.GET, key=key)
+
+        if revoke and r is not None:
+            self.delete(key)
+
+        return r
 
     def set(self, key: str, value) -> bool:
         assert isinstance(key, str), "key must be str"
