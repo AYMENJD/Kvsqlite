@@ -53,9 +53,14 @@ class Sqlite:
 
         self.is_running = True
 
-        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'.format(
-            self.table_name
-        )
+        self.__table_statement = '''
+            CREATE TABLE IF NOT EXISTS "{}" (
+                k VARCHAR(4096) PRIMARY KEY, 
+                v BLOB, 
+                expire_time INTEGER DEFAULT NULL, 
+                one_time BOOLEAN DEFAULT FALSE
+            )
+        '''.format(self.table_name)
         self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
             self.table_name
         )
@@ -92,10 +97,10 @@ class Sqlite:
 
         self.__connection: sqlite3.Connection = self.__connect()
 
-    def request(self, request, key: str = None, value=None):
-        return self.__workers.submit(self.procces_request, request, key, value)
+    def request(self, request, key: str = None, value=None, ttl=None, one_time=False):
+        return self.__workers.submit(self.procces_request, request, key, value, ttl=ttl, one_time=one_time)
 
-    def procces_request(self, request, key: str = None, value=None):
+    def procces_request(self, request, key: str = None, value=None, ttl=None, one_time=False):
         if not self.is_running:
             raise RuntimeError("Database is closed")
 
@@ -104,9 +109,9 @@ class Sqlite:
         if request == REQUEST.GET:
             return self.__get(key)
         elif request == REQUEST.SET:
-            return self.__set(key, value)
+            return self.__set(key, value, one_time=one_time)
         elif request == REQUEST.SETEX:
-            return self.__setex(key, value)
+            return self.__setex(key, value, ttl, one_time=one_time)
         elif request == REQUEST.DELETE:
             return self.__delete(key)
         elif request == REQUEST.COMMIT:
@@ -168,21 +173,42 @@ class Sqlite:
                 self.__get_statement,
                 (key, time()),
             ).fetchone()
+            
             if query:
-                return self.__encoder.decode(query[0])
+                value = self.__encoder.decode(query[0])
+                if self.__is_one_time(key):
+                    self.__delete(key)
+                return value
             else:
                 return None
         except Exception as e:
             logger.exception("GET command exception")
             raise e
 
-    def __set(self, key: str, value):
+    def __is_one_time(self, key: str):
+        query = self.__connection.execute(
+            'SELECT one_time FROM "{}" WHERE k = ?'.format(self.table_name),
+            (key,)
+        ).fetchone()
+
+        if query and query[0]:
+            return True
+        else:
+            return False
+
+    def __set(self, key: str, value, one_time=False):
         with self.__lock:
             try:
                 query = self.__connection.execute(
                     self.__set_statement,
                     (key, self.__encoder.encode(value)),
                 )
+                if one_time:
+                    self.__connection.execute(
+                        'UPDATE "{}" SET one_time = TRUE WHERE k = ?'.format(self.table_name),
+                        (key,)
+                    )
+                
                 if query.rowcount > 0:
                     return True
                 else:
@@ -191,13 +217,23 @@ class Sqlite:
                 logger.exception("SET command exception")
                 raise e
 
-    def __setex(self, key: str, value):
+    def __setex(self, key: str, value, ttl=None, one_time=False):
+        if isinstance(value, list):
+            value = value[0]
+        
         with self.__lock:
             try:
+                expire_time = time() + ttl if ttl is not None else None
                 query = self.__connection.execute(
                     self.__setex_statement,
-                    (key, self.__encoder.encode(value[0]), time() + value[1]),
+                    (key, self.__encoder.encode(value), expire_time),
                 )
+                if one_time:
+                    self.__connection.execute(
+                        'UPDATE "{}" SET one_time = TRUE WHERE k = ?'.format(self.table_name),
+                        (key,)
+                    )
+                
                 if query.rowcount > 0:
                     return True
                 else:

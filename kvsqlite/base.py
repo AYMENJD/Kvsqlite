@@ -1,14 +1,21 @@
 class BaseClient:
-    def get(self, key: str):
+    def get(self, key: str, one_time=False):
         """Get the value of ``key``
 
         Args:
             key (``str``):
                 The key to get
+
+            one_time (``bool``, *optional*):
+                If True, mark the key for one-time retrieval and delete it after retrieval.
+                Defaults to False.
+
+        Returns:
+            ``Any``: The value of the key, or None if key doesn't exist
         """
         raise NotImplementedError
 
-    def set(self, key: str, value):
+    def set(self, key: str, value, one_time=False):
         """Set the value of ``key``
 
         Args:
@@ -18,12 +25,16 @@ class BaseClient:
             value (``Any``):
                 The value to set for ``key``
 
+            one_time (``bool``, *optional*):
+                If True, mark the key for one-time retrieval and delete it after retrieval.
+                Defaults to False.
+
         Returns:
             :py:class:`bool`: ``True`` on success
         """
         raise NotImplementedError
 
-    def setex(self, key: str, ttl: int, value):
+    def setex(self, key: str, ttl: int, value, one_time=False):
         """Set the value of ``key`` with a timeout specified by ``ttl``
 
         Args:
@@ -36,8 +47,9 @@ class BaseClient:
             value (``Any``):
                 The value to set for ``key``
 
-        .. warning::
-            Timeouted keys aren't deleted by default, you must call :func:`cleanex` from time to time
+            one_time (``bool``, *optional*):
+                If True, mark the key for one-time retrieval and delete it after retrieval.
+                Defaults to False.
 
         Returns:
             :py:class:`bool`: ``True`` on success

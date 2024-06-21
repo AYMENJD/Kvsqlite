@@ -100,20 +100,17 @@ class Client(BaseClient):
 
     async def get(self, key: str) -> Any:
         assert isinstance(key, str), "key must be str"
-
         return await self.__invoke(request=REQUEST.GET, key=key)
 
-    async def set(self, key: str, value) -> bool:
+    async def set(self, key: str, value, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
-
-        future = self.__invoke(request=REQUEST.SET, key=key, value=value)
+        future = self.__invoke(request=REQUEST.SET, key=key, value=value, one_time=one_time)
         return await future
 
-    async def setex(self, key: str, ttl: int, value) -> bool:
+    async def setex(self, key: str, ttl: int, value, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
         assert ttl >= 1, "ttl must be greater than 1"
-
-        future = self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
+        future = self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl], one_time=one_time)
         return await future
 
     async def delete(self, key: str) -> bool:
@@ -172,8 +169,8 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.CLOSE, value=optimize_database)
         return await future
 
-    def __invoke(self, request, key=None, value=None):
+    def __invoke(self, request, key=None, value=None, one_time=False):
         assert self.__sqlite.is_running, "Database is closed"
-
-        future = self.__sqlite.request(request, key, value)
+        future = self.__sqlite.request(request, key, value, one_time=one_time)
+        
         return asyncio.wrap_future(future, loop=self.loop)
