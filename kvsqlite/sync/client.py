@@ -1,12 +1,10 @@
 import logging
-
 from typing import Any, List, Tuple, Union
 from ..sqlite import Sqlite, REQUEST
 from ..encoders import PickleEncoder
 from ..base import BaseClient
 
 logger = logging.getLogger(__name__)
-
 
 class Client(BaseClient):
     def __init__(
@@ -93,16 +91,16 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.GET, key=key)
 
-    def set(self, key: str, value) -> bool:
+    def set(self, key: str, value, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
 
-        return self.__invoke(request=REQUEST.SET, key=key, value=value)
+        return self.__invoke(request=REQUEST.SET, key=key, value=value, one_time=one_time)
 
-    def setex(self, key: str, ttl: int, value) -> bool:
+    def setex(self, key: str, ttl: int, value, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
         assert ttl >= 1, "ttl must be greater than 1"
 
-        return self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
+        return self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl], one_time=one_time)
 
     def delete(self, key: str) -> bool:
         assert isinstance(key, str), "key must be str"
@@ -122,17 +120,17 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.TTL, key=key)
 
-    def expire(self, key: str, ttl: int) -> bool:
+    def expire(self, key: str, ttl: int, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
         assert ttl >= 1, "ttl must be greater than 1"
 
-        return self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl)
+        return self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl, one_time=one_time)
 
-    def rename(self, key: str, new_key: str) -> bool:
+    def rename(self, key: str, new_key: str, one_time=False) -> bool:
         assert isinstance(key, str), "key must be str"
         assert isinstance(new_key, str), "new_key must be str"
 
-        return self.__invoke(request=REQUEST.RENAME, key=key, value=new_key)
+        return self.__invoke(request=REQUEST.RENAME, key=key, value=new_key, one_time=one_time)
 
     def keys(self, like: str = "%") -> Union[List[Tuple[str]], None]:
         assert isinstance(like, str), "like must be str"
@@ -150,8 +148,8 @@ class Client(BaseClient):
 
         return self.__invoke(request=REQUEST.CLOSE, value=optimize_database)
 
-    def __invoke(self, request, key=None, value=None):
+    def __invoke(self, request, key=None, value=None, one_time=False):
         assert self.__sqlite.is_running, "Database is closed"
 
-        future = self.__sqlite.request(request, key, value)
+        future = self.__sqlite.request(request, key, value, one_time=one_time)
         return future.result()
