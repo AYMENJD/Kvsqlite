@@ -53,7 +53,7 @@ class Sqlite:
 
         self.is_running = True
 
-        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'.format(
+        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL) WITHOUT ROWID'.format(
             self.table_name
         )
         self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
@@ -83,7 +83,7 @@ class Sqlite:
             self.table_name
         )
         self.__keys_statement = (
-            'SELECT k FROM "{}" WHERE k LIKE ? ORDER BY rowid'.format(self.table_name)
+            'SELECT k FROM "{}" WHERE k LIKE ?'.format(self.table_name)
         )
         self.__cleanex_statement = 'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
             self.table_name
