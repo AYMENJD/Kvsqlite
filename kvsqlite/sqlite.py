@@ -155,6 +155,9 @@ class Sqlite:
         try:
             connection.execute("PRAGMA journal_mode = {}".format(self.journal_mode))
             connection.execute("PRAGMA synchronous = {}".format(self.synchronous))
+            connection.execute("PRAGMA temp_store = MEMORY")
+            connection.execute("PRAGMA cache_size = -64000")
+            connection.execute("PRAGMA mmap_size = 30000000000")
         except Exception as e:
             logger.exception("Error while executing PRAGMA statement")
             raise e
