@@ -56,6 +56,11 @@ class Sqlite:
         self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL) WITHOUT ROWID'.format(
             self.table_name
         )
+        self.__index_statement = (
+            'CREATE INDEX IF NOT EXISTS idx_expire_time ON "{}" (expire_time)'.format(
+                self.table_name
+            )
+        )
         self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
             self.table_name
         )
@@ -323,6 +328,7 @@ class Sqlite:
             try:
                 self.__connection.execute(self.__flush_db_statement)
                 self.__connection.execute(self.__table_statement)
+                self.__connection.execute(self.__index_statement)
                 return True
             except Exception as e:
                 logger.exception("FLUSH_DB command exception")
@@ -371,6 +377,7 @@ class Sqlite:
                     )
             else:
                 connection.execute(self.__table_statement)
+                connection.execute(self.__index_statement)
 
         except Exception:
             logger.exception("Check table error")
