@@ -75,7 +75,7 @@ class Sqlite:
             )
         )
         self.__delete_statement = 'DELETE FROM "{}" WHERE k = ?'.format(self.table_name)
-        self.__exists_statement = 'SELECT k FROM "{}" WHERE k = ? LIMIT 1'.format(
+        self.__exists_statement = 'SELECT EXISTS (SELECT 1 FROM "{}" WHERE k = ? LIMIT 1)'.format(
             self.table_name
         )
         self.__ttl_statement = 'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ? LIMIT 1'.format(
@@ -245,10 +245,7 @@ class Sqlite:
                 (key,),
             ).fetchone()
 
-            if query:
-                return True
-            else:
-                return False
+            return bool(query[0])
         except Exception as e:
             logger.exception("EXISTS command exception")
             raise e
