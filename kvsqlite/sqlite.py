@@ -332,7 +332,7 @@ class Sqlite:
             else:
                 return None
         except Exception as e:
-            logger.exception("PARTITION command exception")
+            logger.exception("ITER_KEYS command exception")
             raise e
     
     def __count(self, like: str):
