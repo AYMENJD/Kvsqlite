@@ -158,6 +158,14 @@ class Client(BaseClient):
         future = self.__invoke(request=REQUEST.KEYS, value=like)
         return await future
     
+    async def iter_keys(self, limit: int, offset: int, like: str = "%") -> Union[List[Tuple[str]], None]:
+        assert isinstance(limit, int), "limit must be int"
+        assert isinstance(offset, int), "offset must be int"
+        assert isinstance(like, str), "like must be str"
+
+        future = self.__invoke(request=REQUEST.ITER_KEYS, value=[limit, offset, like])
+        return await future
+    
     async def count(self, like: str = "%") -> int:
         assert isinstance(like, str), "like must be str"
 
