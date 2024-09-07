@@ -20,6 +20,8 @@ class REQUEST:
     EXPIRE = "EXPIRE"
     RENAME = "RENAME"
     KEYS = "KEYS"
+    ITER_KEYS = "ITER_KEYS"
+    COUNT = "COUNT"
     CLEAN_EX = "CLEAN_EX"
     FLUSH_DB = "FLUSH_DB"
     CLOSE = "CLOSE"
@@ -90,6 +92,12 @@ class Sqlite:
         self.__keys_statement = (
             'SELECT k FROM "{}" WHERE k LIKE ?'.format(self.table_name)
         )
+        self.__iter_keys_statement = (
+            'SELECT k FROM "{}" WHERE k LIKE ? LIMIT ? OFFSET ?'.format(self.table_name)
+        )
+        self.__count_statement = 'SELECT COUNT(*) FROM "{}" where k LIKE ?'.format(
+            self.table_name
+        )
         self.__cleanex_statement = 'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
             self.table_name
         )
@@ -126,6 +134,10 @@ class Sqlite:
             return self.__rename(key, value)
         elif request == REQUEST.KEYS:
             return self.__keys(value)
+        elif request == REQUEST.ITER_KEYS:
+            return self.__iter_keys(value)
+        elif request == REQUEST.COUNT:
+            return self.__count(value)
         elif request == REQUEST.CLEAN_EX:
             return self.__clean_ex()
         elif request == REQUEST.FLUSH_DB:
@@ -305,6 +317,36 @@ class Sqlite:
                 return None
         except Exception as e:
             logger.exception("KEYS command exception")
+            raise e
+        
+    def __iter_keys(self, value):
+        limit, offset, like = value
+        try:
+            offset = (offset - 1) * limit
+            query = self.__connection.execute(
+                self.__iter_keys_statement,
+                (like, limit, offset),
+            ).fetchall()
+            if query:
+                return query
+            else:
+                return None
+        except Exception as e:
+            logger.exception("ITER_KEYS command exception")
+            raise e
+    
+    def __count(self, like: str):
+        try:
+            query = self.__connection.execute(
+                self.__count_statement,
+                (like,),
+            ).fetchone()
+            if query:
+                return query[0]
+            else:
+                return 0
+        except Exception as e:
+            logger.exception("COUNT command exception")
             raise e
 
     def __clean_ex(self):
