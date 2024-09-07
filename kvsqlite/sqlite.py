@@ -53,8 +53,13 @@ class Sqlite:
 
         self.is_running = True
 
-        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL)'.format(
+        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL) WITHOUT ROWID'.format(
             self.table_name
+        )
+        self.__index_statement = (
+            'CREATE INDEX IF NOT EXISTS idx_lookup ON "{}" (k, expire_time)'.format(
+                self.table_name
+            )
         )
         self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
             self.table_name
@@ -70,7 +75,7 @@ class Sqlite:
             )
         )
         self.__delete_statement = 'DELETE FROM "{}" WHERE k = ?'.format(self.table_name)
-        self.__exists_statement = 'SELECT k FROM "{}" WHERE k = ? LIMIT 1'.format(
+        self.__exists_statement = 'SELECT EXISTS (SELECT 1 FROM "{}" WHERE k = ? LIMIT 1)'.format(
             self.table_name
         )
         self.__ttl_statement = 'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ? LIMIT 1'.format(
@@ -83,7 +88,7 @@ class Sqlite:
             self.table_name
         )
         self.__keys_statement = (
-            'SELECT k FROM "{}" WHERE k LIKE ? ORDER BY rowid'.format(self.table_name)
+            'SELECT k FROM "{}" WHERE k LIKE ?'.format(self.table_name)
         )
         self.__cleanex_statement = 'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
             self.table_name
@@ -237,10 +242,7 @@ class Sqlite:
                 (key,),
             ).fetchone()
 
-            if query:
-                return True
-            else:
-                return False
+            return bool(query[0])
         except Exception as e:
             logger.exception("EXISTS command exception")
             raise e
@@ -323,6 +325,7 @@ class Sqlite:
             try:
                 self.__connection.execute(self.__flush_db_statement)
                 self.__connection.execute(self.__table_statement)
+                self.__connection.execute(self.__index_statement)
                 return True
             except Exception as e:
                 logger.exception("FLUSH_DB command exception")
@@ -371,6 +374,7 @@ class Sqlite:
                     )
             else:
                 connection.execute(self.__table_statement)
+                connection.execute(self.__index_statement)
 
         except Exception:
             logger.exception("Check table error")
