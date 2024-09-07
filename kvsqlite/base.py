@@ -130,6 +130,40 @@ class BaseClient:
                 If there is no keys to return
         """
         raise NotImplementedError
+    
+    def iter_keys(self, limit: int, offset: int, like: str = "%"):
+        """Return list of keys in database with the given pattern
+
+        Args:
+            limit (``int``):
+                The number of keys to return
+
+            offset (``int``):
+                The offset to start from
+
+            like (``str``, *optional*):
+                SQLite LIKE operator. Defaults to ``%`` (all keys)
+
+        Returns:
+            :py:class:`list`:
+                A list of :py:class:`Tuple` contains keys
+
+            :py:class:`None`:
+                If there is no keys to return
+        """
+        raise NotImplementedError
+    
+    def count(self, like: str = "%"):
+        """Return number of keys in database with the given pattern
+
+        Args:
+            like (``str``, *optional*):
+                SQLite LIKE operator. Defaults to ``%`` (all keys)
+
+        Returns:
+            :py:class:`int`: Number of keys
+        """
+        raise NotImplementedError
 
     def cleanex(self):
         """Removes all expired keys from database. This reduces disk usage
