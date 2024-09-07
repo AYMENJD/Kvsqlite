@@ -130,6 +130,18 @@ class BaseClient:
                 If there is no keys to return
         """
         raise NotImplementedError
+    
+    def count(self, like: str = "%"):
+        """Return number of keys in database with the given pattern
+
+        Args:
+            like (``str``, *optional*):
+                SQLite LIKE operator. Defaults to ``%`` (all keys)
+
+        Returns:
+            :py:class:`int`: Number of keys
+        """
+        raise NotImplementedError
 
     def cleanex(self):
         """Removes all expired keys from database. This reduces disk usage

@@ -157,6 +157,12 @@ class Client(BaseClient):
 
         future = self.__invoke(request=REQUEST.KEYS, value=like)
         return await future
+    
+    async def count(self, like: str = "%") -> int:
+        assert isinstance(like, str), "like must be str"
+
+        future = self.__invoke(request=REQUEST.COUNT, value=like)
+        return await future
 
     async def cleanex(self) -> int:
         future = self.__invoke(request=REQUEST.CLEAN_EX)

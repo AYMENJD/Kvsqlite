@@ -138,6 +138,11 @@ class Client(BaseClient):
         assert isinstance(like, str), "like must be str"
 
         return self.__invoke(request=REQUEST.KEYS, value=like)
+    
+    def count(self, like: str = "%") -> int:
+        assert isinstance(like, str), "like must be str"
+
+        return self.__invoke(request=REQUEST.COUNT, value=like)
 
     def cleanex(self) -> int:
         return self.__invoke(request=REQUEST.CLEAN_EX)
