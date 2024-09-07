@@ -57,7 +57,7 @@ class Sqlite:
             self.table_name
         )
         self.__index_statement = (
-            'CREATE INDEX IF NOT EXISTS idx_expire_time ON "{}" (expire_time)'.format(
+            'CREATE INDEX IF NOT EXISTS idx_lookup ON "{}" (k, expire_time)'.format(
                 self.table_name
             )
         )
