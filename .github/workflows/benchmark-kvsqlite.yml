@@ -5,14 +5,17 @@ on:
   push:
     branches:
       - "main"
-
     paths:
       - "benchmark/"
+      - "kvsqlite/"
+      - ".github/workflows/benchmark-kvsqlite.yml"
 
 jobs:
-  build:
+  benchmark:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
@@ -31,5 +34,14 @@ jobs:
 
       - name: Benchmark
         run: |
-          cd benchmark/
-          python benchmark_kvsqlite.py --query-count 100000
+          python benchmark/benchmark_kvsqlite.py \
+            --query-count 100000 \
+            --db-path "$RUNNER_TEMP/bench.sqlite" \
+            | tee "$RUNNER_TEMP/bench.txt"
+          {
+            echo "## Python ${{ matrix.python-version }}"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/bench.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

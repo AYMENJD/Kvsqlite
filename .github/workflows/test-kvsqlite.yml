@@ -9,11 +9,12 @@ on:
     paths:
       - "kvsqlite/**"
       - "test/**"
-      - "setup.py"
+      - "pyproject.toml"
       - ".github/workflows/test-kvsqlite.yml"
 
 jobs:
-  Test-python:
+  test:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -34,4 +35,15 @@ jobs:
           pip install .
 
       - name: Test
-        run: pytest test/ -v
+        run: |
+          set +e
+          python -m pytest test/ -v --tb=short | tee "$RUNNER_TEMP/pytest.txt"
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Python ${{ matrix.python-version }}"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/pytest.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
