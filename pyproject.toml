@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Kvsqlite"
+dynamic = ["version"]
+description = "Easy-to-use synchronous/asynchronous key-value database backed by sqlite3."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "AYMEN A", email = "let.me.code.safe@gmail.com" }]
+requires-python = ">=3.8"
+keywords = [
+    "sync",
+    "asyncio",
+    "sqlite",
+    "sqlite3",
+    "key-value",
+    "database",
+    "redis",
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+]
+
+[project.urls]
+Source = "https://github.com/AYMENJD/Kvsqlite"
+Tracker = "https://github.com/AYMENJD/Kvsqlite/issues"
+Documentation = "https://kvsqlite.rtfd.io/"
+
+[tool.setuptools.dynamic]
+version = { attr = "kvsqlite.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["kvsqlite*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["test"]
+python_files = ["test_kvsqlite.py"]

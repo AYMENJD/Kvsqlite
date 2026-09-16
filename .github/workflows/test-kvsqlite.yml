@@ -2,26 +2,28 @@ name: Test kvsqlite
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - "main"
-
     paths:
-      - "kvsqlite/client.py"
-      - "kvsqlite/sqlite.py"
-      - "test/"
+      - "kvsqlite/**"
+      - "test/**"
+      - "setup.py"
+      - ".github/workflows/test-kvsqlite.yml"
 
 jobs:
   Test-python:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -32,6 +34,4 @@ jobs:
           pip install .
 
       - name: Test
-        run: |
-          cd test/
-          pytest -v
+        run: pytest test/ -v

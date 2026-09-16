@@ -1,9 +1,9 @@
 import logging
-
 from typing import Any, List, Tuple, Union
-from ..sqlite import Sqlite, REQUEST
-from ..encoders import PickleEncoder
+
 from ..base import BaseClient
+from ..encoders import PickleEncoder
+from ..sqlite import REQUEST, Sqlite
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,12 @@ class Client(BaseClient):
         assert isinstance(workers, int), "workers must be int"
         assert workers > 0, "workers must be greater than 0"
 
-        assert hasattr(
-            default_encoder, "encode"
-        ), "{} must have an 'encode' function".format(default_encoder.__name__)
-        assert hasattr(
-            default_encoder, "decode"
-        ), "{} must have an 'decode' function".format(default_encoder.__name__)
+        assert hasattr(default_encoder, "encode"), (
+            "{} must have an 'encode' function".format(default_encoder.__name__)
+        )
+        assert hasattr(default_encoder, "decode"), (
+            "{} must have an 'decode' function".format(default_encoder.__name__)
+        )
 
         self.database = database
         self.table_name = table_name
@@ -100,7 +100,7 @@ class Client(BaseClient):
 
     def setex(self, key: str, ttl: int, value) -> bool:
         assert isinstance(key, str), "key must be str"
-        assert ttl >= 1, "ttl must be greater than 1"
+        assert ttl >= 1, "ttl must be >= 1"
 
         return self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
 
@@ -124,7 +124,7 @@ class Client(BaseClient):
 
     def expire(self, key: str, ttl: int) -> bool:
         assert isinstance(key, str), "key must be str"
-        assert ttl >= 1, "ttl must be greater than 1"
+        assert ttl >= 1, "ttl must be >= 1"
 
         return self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl)
 

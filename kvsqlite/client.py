@@ -1,10 +1,10 @@
 import asyncio
 import logging
-
 from typing import Any, List, Tuple, Union
-from .sqlite import Sqlite, REQUEST
-from .encoders import PickleEncoder
+
 from .base import BaseClient
+from .encoders import PickleEncoder
+from .sqlite import REQUEST, Sqlite
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +57,12 @@ class Client(BaseClient):
         assert isinstance(workers, int), "workers must be int"
         assert workers > 0, "workers must be greater than 0"
 
-        assert hasattr(
-            default_encoder, "encode"
-        ), "{} must have an 'encode' function".format(default_encoder.__name__)
-        assert hasattr(
-            default_encoder, "decode"
-        ), "{} must have an 'decode' function".format(default_encoder.__name__)
+        assert hasattr(default_encoder, "encode"), (
+            "{} must have an 'encode' function".format(default_encoder.__name__)
+        )
+        assert hasattr(default_encoder, "decode"), (
+            "{} must have an 'decode' function".format(default_encoder.__name__)
+        )
 
         self.database = database
         self.table_name = table_name
@@ -71,11 +71,7 @@ class Client(BaseClient):
         self.synchronous = synchronous
         self.__encoder = default_encoder()
         self.workers = workers
-        self.loop = (
-            loop
-            if isinstance(loop, asyncio.AbstractEventLoop)
-            else asyncio.get_event_loop()
-        )
+        self.loop = loop if isinstance(loop, asyncio.AbstractEventLoop) else None
 
         self.__sqlite = Sqlite(
             self.database,
@@ -89,7 +85,13 @@ class Client(BaseClient):
 
         logger.debug("Using {} as encoder".format(default_encoder.__name__))
 
+    def __ensure_loop(self):
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
+        return self.loop
+
     async def __aenter__(self):
+        self.__ensure_loop()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -111,7 +113,7 @@ class Client(BaseClient):
 
     async def setex(self, key: str, ttl: int, value) -> bool:
         assert isinstance(key, str), "key must be str"
-        assert ttl >= 1, "ttl must be greater than 1"
+        assert ttl >= 1, "ttl must be >= 1"
 
         future = self.__invoke(request=REQUEST.SETEX, key=key, value=[value, ttl])
         return await future
@@ -140,7 +142,7 @@ class Client(BaseClient):
 
     async def expire(self, key: str, ttl: int) -> bool:
         assert isinstance(key, str), "key must be str"
-        assert ttl >= 1, "ttl must be greater than 1"
+        assert ttl >= 1, "ttl must be >= 1"
 
         future = self.__invoke(request=REQUEST.EXPIRE, key=key, value=ttl)
         return await future
@@ -176,4 +178,4 @@ class Client(BaseClient):
         assert self.__sqlite.is_running, "Database is closed"
 
         future = self.__sqlite.request(request, key, value)
-        return asyncio.wrap_future(future, loop=self.loop)
+        return asyncio.wrap_future(future, loop=self.__ensure_loop())

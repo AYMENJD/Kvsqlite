@@ -1,4 +1,4 @@
-from pickle import dumps, loads, HIGHEST_PROTOCOL
+from pickle import HIGHEST_PROTOCOL, dumps, loads
 from sqlite3 import Binary
 
 
@@ -26,5 +26,6 @@ class StringEncoder:
         return Binary(text.encode("utf-8"))
 
     def decode(self, text):
-        assert isinstance(text, str), "text is not str"
-        return text
+        if isinstance(text, str):
+            return text
+        return bytes(text).decode("utf-8")

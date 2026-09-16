@@ -1,12 +1,17 @@
-import sqlite3
 import logging
-
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
 from sys import version_info
+from threading import Lock, local
 from time import time
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+
+CURRENT_SCHEMA_VERSION = 1
+_BUSY_TIMEOUT_MS = 5000
+_JOURNAL_MODES = frozenset(("WAL", "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF"))
+_SYNCHRONOUS = frozenset(("OFF", "NORMAL", "FULL", "EXTRA"))
 
 
 class REQUEST:
@@ -25,6 +30,10 @@ class REQUEST:
     CLOSE = "CLOSE"
 
 
+def _quote_ident(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
 class Sqlite:
     def __init__(
         self,
@@ -41,6 +50,10 @@ class Sqlite:
         assert isinstance(autocommit, bool), "autocommit must be bool"
         assert isinstance(journal_mode, str), "journal_mode must be str"
         assert isinstance(synchronous, str), "synchronous must be str"
+        if journal_mode.upper() not in _JOURNAL_MODES:
+            raise ValueError("invalid journal_mode {}".format(journal_mode))
+        if synchronous.upper() not in _SYNCHRONOUS:
+            raise ValueError("invalid synchronous {}".format(synchronous))
 
         self.database = database
         self.table_name = table_name
@@ -50,52 +63,69 @@ class Sqlite:
         self.__encoder = encoder
         self.__workers = ThreadPoolExecutor(workers, "kvsqlite")
         self.__lock = Lock()
-
+        self.__local = local()
+        self.__connections = []
+        self.__shared = None
+        self.__keepalive = None
+        self.__dsn, self.__uri = self.__resolve_dsn(database)
         self.is_running = True
 
-        self.__table_statement = 'CREATE TABLE IF NOT EXISTS "{}" (k VARCHAR(4096) PRIMARY KEY, v BLOB, expire_time INTEGER DEFAULT NULL) WITHOUT ROWID'.format(
-            self.table_name
+        quoted = _quote_ident(self.table_name)
+        expire_index = _quote_ident("idx_{}_expire".format(self.table_name))
+
+        self.__table_statement = (
+            "CREATE TABLE IF NOT EXISTS {} (k VARCHAR(4096) PRIMARY KEY, "
+            "v BLOB, expire_time INTEGER DEFAULT NULL) WITHOUT ROWID".format(quoted)
         )
-        self.__index_statement = (
-            'CREATE INDEX IF NOT EXISTS idx_lookup ON "{}" (k, expire_time)'.format(
-                self.table_name
-            )
+        self.__expire_index_statement = (
+            "CREATE INDEX IF NOT EXISTS {} ON {} (expire_time) "
+            "WHERE expire_time IS NOT NULL".format(expire_index, quoted)
         )
-        self.__get_statement = 'SELECT v FROM "{}" WHERE k = ? AND (expire_time IS NULL OR expire_time > ?) LIMIT 1'.format(
-            self.table_name
+        self.__get_statement = (
+            "SELECT v FROM {} WHERE k = ? AND "
+            "(expire_time IS NULL OR expire_time > ?) LIMIT 1".format(quoted)
         )
         self.__set_statement = (
-            'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,NULL)'.format(
-                self.table_name
-            )
+            "REPLACE INTO {} (k, v, expire_time) VALUES(?,?,NULL)".format(quoted)
         )
         self.__setex_statement = (
-            'REPLACE INTO "{}" (k, v, expire_time) VALUES(?,?,?)'.format(
-                self.table_name
+            "REPLACE INTO {} (k, v, expire_time) VALUES(?,?,?)".format(quoted)
+        )
+        self.__delete_statement = "DELETE FROM {} WHERE k = ?".format(quoted)
+        self.__exists_statement = (
+            "SELECT EXISTS (SELECT 1 FROM {} WHERE k = ? AND "
+            "(expire_time IS NULL OR expire_time > ?) LIMIT 1)".format(quoted)
+        )
+        self.__ttl_statement = (
+            "SELECT expire_time FROM {} WHERE k = ? AND expire_time > ? LIMIT 1".format(
+                quoted
             )
         )
-        self.__delete_statement = 'DELETE FROM "{}" WHERE k = ?'.format(self.table_name)
-        self.__exists_statement = 'SELECT EXISTS (SELECT 1 FROM "{}" WHERE k = ? LIMIT 1)'.format(
-            self.table_name
+        self.__expire_statement = "UPDATE {} SET expire_time = ? WHERE k = ?".format(
+            quoted
         )
-        self.__ttl_statement = 'SELECT expire_time FROM "{}" WHERE k = ? AND expire_time > ? LIMIT 1'.format(
-            self.table_name
-        )
-        self.__expire_statement = 'UPDATE "{}" SET expire_time = ? WHERE k = ?'.format(
-            self.table_name
-        )
-        self.__rename_statement = 'UPDATE OR IGNORE "{}" SET k = ? WHERE k = ?'.format(
-            self.table_name
+        self.__rename_statement = "UPDATE OR IGNORE {} SET k = ? WHERE k = ?".format(
+            quoted
         )
         self.__keys_statement = (
-            'SELECT k FROM "{}" WHERE k LIKE ?'.format(self.table_name)
+            "SELECT k FROM {} WHERE k LIKE ? AND "
+            "(expire_time IS NULL OR expire_time > ?)".format(quoted)
         )
-        self.__cleanex_statement = 'DELETE FROM "{}" WHERE expire_time IS NOT NULL AND expire_time <= ?'.format(
-            self.table_name
+        self.__cleanex_statement = (
+            "DELETE FROM {} WHERE expire_time IS NOT NULL AND expire_time <= ?".format(
+                quoted
+            )
         )
-        self.__flush_db_statement = 'DROP TABLE "{}"'.format(self.table_name)
+        self.__flush_db_statement = "DROP TABLE IF EXISTS {}".format(quoted)
+        self.__table_info_statement = "PRAGMA table_info({})".format(quoted)
 
-        self.__connection: sqlite3.Connection = self.__connect()
+        bootstrap = self.__open_connection()
+        self.__migrate(bootstrap)
+        self.__connections.append(bootstrap)
+        if self.autocommit:
+            self.__keepalive = bootstrap
+        else:
+            self.__shared = bootstrap
 
     def request(self, request, key: str = None, value=None):
         return self.__workers.submit(self.procces_request, request, key, value)
@@ -104,8 +134,19 @@ class Sqlite:
         if not self.is_running:
             raise RuntimeError("Database is closed")
 
-        logger.debug("Request={}, key={}".format(request, key))
+        logger.debug("Request=%s, key=%s", request, key)
 
+        if self.__shared is not None or request in (
+            REQUEST.CLOSE,
+            REQUEST.FLUSH_DB,
+        ):
+            with self.__lock:
+                if not self.is_running and request != REQUEST.CLOSE:
+                    raise RuntimeError("Database is closed")
+                return self.__dispatch(request, key, value)
+        return self.__dispatch(request, key, value)
+
+    def __dispatch(self, request, key, value):
         if request == REQUEST.GET:
             return self.__get(key)
         elif request == REQUEST.SET:
@@ -135,16 +176,26 @@ class Sqlite:
         else:
             raise ValueError("Unknown request {}".format(request))
 
-    def __connect(self):
-        try:
-            if self.autocommit:
-                connection = sqlite3.connect(
-                    self.database, isolation_level=None, check_same_thread=False
-                )
-            else:
-                connection = sqlite3.connect(self.database, check_same_thread=False)
+    def __resolve_dsn(self, database):
+        if database == ":memory:":
+            return (
+                "file:kvsqlite_{}?mode=memory&cache=shared".format(uuid4().hex),
+                True,
+            )
+        if database.startswith("file:"):
+            return database, True
+        return database, False
 
-            # connection.row_factory = sqlite3.Row
+    def __open_connection(self):
+        try:
+            kwargs = {
+                "check_same_thread": False,
+                "timeout": _BUSY_TIMEOUT_MS / 1000.0,
+                "uri": self.__uri,
+            }
+            if self.autocommit:
+                kwargs["isolation_level"] = None
+            connection = sqlite3.connect(self.__dsn, **kwargs)
             logger.info("Connected to {}".format(self.database))
         except Exception as e:
             logger.exception(
@@ -155,24 +206,77 @@ class Sqlite:
         try:
             connection.execute("PRAGMA journal_mode = {}".format(self.journal_mode))
             connection.execute("PRAGMA synchronous = {}".format(self.synchronous))
+            connection.execute("PRAGMA busy_timeout = {}".format(_BUSY_TIMEOUT_MS))
+            connection.execute("PRAGMA temp_store = MEMORY")
         except Exception as e:
             logger.exception("Error while executing PRAGMA statement")
-            raise e
-
-        try:
-            self.__check_table(connection)
-        except Exception as e:
-            logger.exception("Error while checking table")
+            connection.close()
             raise e
 
         return connection
 
+    def __conn(self):
+        if self.__shared is not None:
+            return self.__shared
+        conn = getattr(self.__local, "conn", None)
+        if conn is None:
+            conn = self.__open_connection()
+            with self.__lock:
+                if not self.is_running:
+                    conn.close()
+                    raise RuntimeError("Database is closed")
+                self.__local.conn = conn
+                self.__connections.append(conn)
+        return conn
+
+    def __migrate(self, connection):
+        try:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version >= CURRENT_SCHEMA_VERSION:
+                return
+            self.__migrate_to_v1(connection)
+            connection.execute(
+                "PRAGMA user_version = {}".format(CURRENT_SCHEMA_VERSION)
+            )
+        except Exception:
+            logger.exception("Error while checking table")
+            raise
+
+    def __migrate_to_v1(self, connection):
+        table_exists = (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (self.table_name,),
+            ).fetchone()
+            is not None
+        )
+
+        if table_exists:
+            columns = [
+                row[1]
+                for row in connection.execute(self.__table_info_statement).fetchall()
+            ]
+            if "expire_time" not in columns:
+                connection.execute(
+                    "ALTER TABLE {} ADD COLUMN expire_time INTEGER DEFAULT NULL".format(
+                        _quote_ident(self.table_name)
+                    )
+                )
+        else:
+            connection.execute(self.__table_statement)
+
+        connection.execute(self.__expire_index_statement)
+
     def __get(self, key: str):
         try:
-            query = self.__connection.execute(
-                self.__get_statement,
-                (key, time()),
-            ).fetchone()
+            query = (
+                self.__conn()
+                .execute(
+                    self.__get_statement,
+                    (key, time()),
+                )
+                .fetchone()
+            )
             if query:
                 return self.__encoder.decode(query[0])
             else:
@@ -182,66 +286,56 @@ class Sqlite:
             raise e
 
     def __set(self, key: str, value):
-        with self.__lock:
-            try:
-                query = self.__connection.execute(
-                    self.__set_statement,
-                    (key, self.__encoder.encode(value)),
-                )
-                if query.rowcount > 0:
-                    return True
-                else:
-                    return False
-            except Exception as e:
-                logger.exception("SET command exception")
-                raise e
+        try:
+            query = self.__conn().execute(
+                self.__set_statement,
+                (key, self.__encoder.encode(value)),
+            )
+            return query.rowcount > 0
+        except Exception as e:
+            logger.exception("SET command exception")
+            raise e
 
     def __setex(self, key: str, value):
-        with self.__lock:
-            try:
-                query = self.__connection.execute(
-                    self.__setex_statement,
-                    (key, self.__encoder.encode(value[0]), time() + value[1]),
-                )
-                if query.rowcount > 0:
-                    return True
-                else:
-                    return False
-            except Exception as e:
-                logger.exception("SETEX command exception")
-                raise e
+        try:
+            query = self.__conn().execute(
+                self.__setex_statement,
+                (key, self.__encoder.encode(value[0]), time() + value[1]),
+            )
+            return query.rowcount > 0
+        except Exception as e:
+            logger.exception("SETEX command exception")
+            raise e
 
     def __delete(self, key: str):
-        with self.__lock:
-            try:
-                query = self.__connection.execute(
-                    self.__delete_statement,
-                    (key,),
-                )
-                if query.rowcount > 0:
-                    return True
-                else:
-                    return False
-            except Exception as e:
-                logger.exception("DELETE command exception")
-                raise e
+        try:
+            query = self.__conn().execute(
+                self.__delete_statement,
+                (key,),
+            )
+            return query.rowcount > 0
+        except Exception as e:
+            logger.exception("DELETE command exception")
+            raise e
 
     def __commit(self):
-        with self.__lock:
-            try:
-                self.__connection.commit()
-                return True
-            except Exception as e:
-                logger.exception("COMMIT command exception")
-                raise e
+        try:
+            self.__conn().commit()
+            return True
+        except Exception as e:
+            logger.exception("COMMIT command exception")
+            raise e
 
     def __exists(self, key: str):
         try:
-            query = self.__connection.execute(
-                self.__exists_statement,
-                (key,),
-            ).fetchone()
-
+            query = (
+                self.__conn()
+                .execute(
+                    self.__exists_statement,
+                    (key, time()),
+                )
+                .fetchone()
+            )
             return bool(query[0])
         except Exception as e:
             logger.exception("EXISTS command exception")
@@ -249,11 +343,14 @@ class Sqlite:
 
     def __ttl(self, key: str):
         try:
-            query = self.__connection.execute(
-                self.__ttl_statement,
-                (key, time()),
-            ).fetchone()
-
+            query = (
+                self.__conn()
+                .execute(
+                    self.__ttl_statement,
+                    (key, time()),
+                )
+                .fetchone()
+            )
             if query:
                 return query[0] - time()
             else:
@@ -263,42 +360,37 @@ class Sqlite:
             raise e
 
     def __expire(self, key: str, ttl: int):
-        with self.__lock:
-            try:
-                query = self.__connection.execute(
-                    self.__expire_statement,
-                    (time() + ttl, key),
-                )
-
-                if query.rowcount > 0:
-                    return True
-                else:
-                    return False
-            except Exception as e:
-                logger.exception("EXPIRE command exception")
-                raise e
+        try:
+            query = self.__conn().execute(
+                self.__expire_statement,
+                (time() + ttl, key),
+            )
+            return query.rowcount > 0
+        except Exception as e:
+            logger.exception("EXPIRE command exception")
+            raise e
 
     def __rename(self, key: str, new_key: str):
         try:
-            query = self.__connection.execute(
+            query = self.__conn().execute(
                 self.__rename_statement,
                 (new_key, key),
             )
-
-            if query.rowcount > 0:
-                return True
-            else:
-                return False
+            return query.rowcount > 0
         except Exception as e:
             logger.exception("RENAME command exception")
             raise e
 
     def __keys(self, like: str):
         try:
-            query = self.__connection.execute(
-                self.__keys_statement,
-                (like,),
-            ).fetchall()
+            query = (
+                self.__conn()
+                .execute(
+                    self.__keys_statement,
+                    (like, time()),
+                )
+                .fetchall()
+            )
             if query:
                 return query
             else:
@@ -308,73 +400,51 @@ class Sqlite:
             raise e
 
     def __clean_ex(self):
-        with self.__lock:
-            try:
-                query = self.__connection.execute(
-                    self.__cleanex_statement,
-                    (time(),),
-                )
-
-                return query.rowcount
-            except Exception as e:
-                logger.exception("CLEAN_EX command exception")
-                raise e
+        try:
+            query = self.__conn().execute(
+                self.__cleanex_statement,
+                (time(),),
+            )
+            return query.rowcount
+        except Exception as e:
+            logger.exception("CLEAN_EX command exception")
+            raise e
 
     def __flush_db(self):
-        with self.__lock:
-            try:
-                self.__connection.execute(self.__flush_db_statement)
-                self.__connection.execute(self.__table_statement)
-                self.__connection.execute(self.__index_statement)
-                return True
-            except Exception as e:
-                logger.exception("FLUSH_DB command exception")
-                raise e
+        try:
+            conn = self.__conn()
+            conn.execute(self.__flush_db_statement)
+            conn.execute(self.__table_statement)
+            conn.execute(self.__expire_index_statement)
+            return True
+        except Exception as e:
+            logger.exception("FLUSH_DB command exception")
+            raise e
 
     def __close(self, optimize: bool):
-        with self.__lock:
-            try:
-                if optimize:
-                    self.__connection.execute("PRAGMA optimize")
-                self.__connection.close()
-                logger.info("Connection to {} closed".format(self.database))
-
-                if version_info.minor > 8:
-                    self.__workers.shutdown(False, cancel_futures=True)
-                else:
-                    self.__workers.shutdown(False)
-
-                self.is_running = False
-                return True
-            except Exception as e:
-                logger.exception("CLOSE command exception")
-                raise e
-
-    def __check_table(self, connection: sqlite3.Connection):
         try:
-            table_exists = (
-                connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-                    (self.table_name,),
-                ).fetchone()
-                is not None
-            )
+            self.is_running = False
+            conns = list(self.__connections)
+            if optimize and conns:
+                try:
+                    conns[0].execute("PRAGMA optimize")
+                except Exception:
+                    logger.exception("PRAGMA optimize failed")
+            for connection in conns:
+                try:
+                    connection.close()
+                except Exception:
+                    logger.exception("Error closing sqlite3 connection")
+            self.__connections = []
+            self.__shared = None
+            self.__keepalive = None
+            logger.info("Connection to {} closed".format(self.database))
 
-            if table_exists:
-                query = connection.execute(
-                    "PRAGMA table_info({})".format((self.table_name))
-                )
-                columns = [row[1] for row in query.fetchall()]
-
-                if "expire_time" not in columns:
-                    connection.execute(
-                        "ALTER TABLE '{}' ADD COLUMN expire_time INTEGER DEFAULT NULL".format(
-                            self.table_name
-                        )
-                    )
+            if (version_info.major, version_info.minor) >= (3, 9):
+                self.__workers.shutdown(False, cancel_futures=True)
             else:
-                connection.execute(self.__table_statement)
-                connection.execute(self.__index_statement)
-
-        except Exception:
-            logger.exception("Check table error")
+                self.__workers.shutdown(False)
+            return True
+        except Exception as e:
+            logger.exception("CLOSE command exception")
+            raise e

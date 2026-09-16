@@ -1,4 +1,4 @@
-# Kvsqlite [![version](https://img.shields.io/pypi/v/Kvsqlite?style=flat&logo=pypi)](https://pypi.org/project/Kvsqlite) [![Downloads](https://static.pepy.tech/personalized-badge/Kvsqlite?period=month&units=none&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/Kvsqlite)
+# Kvsqlite [![version](https://img.shields.io/pypi/v/Kvsqlite?style=flat&logo=pypi)](https://pypi.org/project/Kvsqlite) [![Python Versions](https://img.shields.io/pypi/pyversions/kvsqlite?style=flat&logo=python)](https://pypi.org/project/kvsqlite) [![Downloads](https://img.shields.io/pepy/dt/kvsqlite?style=flat&logo=pypi)](https://pepy.tech/project/Kvsqlite)
 
 Easy, Simple and powerful key-value database backed by sqlite3.
 
@@ -10,7 +10,7 @@ Easy, Simple and powerful key-value database backed by sqlite3.
 
 ### Requirements
 
-- Python3.8+
+- Python 3.8+
 
 ### Installation
 
