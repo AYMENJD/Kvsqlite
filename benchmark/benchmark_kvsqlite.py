@@ -10,6 +10,12 @@ try:
 except ImportError:
     psutil = None
 
+ENCODERS = {
+    "pickle": kvsqlite.PickleEncoder,
+    "marshal": kvsqlite.MarshalEncoder,
+    "string": kvsqlite.StringEncoder,
+}
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="Benchmark kvsqlite")
@@ -29,6 +35,12 @@ def parse_args():
         type=int,
         default=5,
         help="Worker threads for the concurrent cases (default 5)",
+    )
+    p.add_argument(
+        "--encoder",
+        choices=["all"] + sorted(ENCODERS),
+        default="all",
+        help="Encoder to bench (default all)",
     )
     args = p.parse_args()
     if args.query_count < 1:
@@ -87,26 +99,20 @@ def unlink(path):
             pass
 
 
-async def main():
-    args = parse_args()
-    items = pairs(args.query_count)
-    n = args.query_count
-    unlink(args.db_path)
-
-    print(
-        "kvsqlite %s  n=%d  workers=%d  db=%s"
-        % (kvsqlite.VERSION, n, args.workers, args.db_path)
-    )
+async def run_suite(path, n, workers, encoder, items):
+    kw = {"default_encoder": encoder}
+    print()
+    print("encoder %s" % encoder.__name__)
     print(fmt_header())
 
-    async with kvsqlite.Client(args.db_path) as db:
+    async with kvsqlite.Client(path, **kw) as db:
         await timed("set", n, lambda: seq(db, items, lambda d, k, v: d.set(k, v)))
         await timed("get", n, lambda: seq(db, items, lambda d, k, v: d.get(k)))
         await timed("exists", n, lambda: seq(db, items, lambda d, k, v: d.exists(k)))
         await timed("delete", n, lambda: seq(db, items, lambda d, k, v: d.delete(k)))
         await db.flush()
 
-    async with kvsqlite.Client(args.db_path) as db:
+    async with kvsqlite.Client(path, **kw) as db:
         await timed(
             "setex",
             n,
@@ -119,7 +125,7 @@ async def main():
         )
         await db.flush()
 
-    async with kvsqlite.Client(args.db_path, autocommit=False) as db:
+    async with kvsqlite.Client(path, autocommit=False, **kw) as db:
 
         async def batched():
             await seq(db, items, lambda d, k, v: d.set(k, v))
@@ -128,7 +134,7 @@ async def main():
         await timed("set (no autocommit)", n, batched)
         await db.flush()
 
-    async with kvsqlite.Client(args.db_path, workers=args.workers) as db:
+    async with kvsqlite.Client(path, workers=workers, **kw) as db:
         await timed(
             "set concurrent",
             n,
@@ -141,7 +147,26 @@ async def main():
         )
         await db.flush()
 
+
+async def main():
+    args = parse_args()
+    items = pairs(args.query_count)
+    n = args.query_count
     unlink(args.db_path)
+
+    if args.encoder == "all":
+        selected = [ENCODERS[name] for name in sorted(ENCODERS)]
+    else:
+        selected = [ENCODERS[args.encoder]]
+
+    print(
+        "kvsqlite %s  n=%d  workers=%d  db=%s"
+        % (kvsqlite.VERSION, n, args.workers, args.db_path)
+    )
+
+    for encoder in selected:
+        await run_suite(args.db_path, n, args.workers, encoder, items)
+        unlink(args.db_path)
 
 
 if __name__ == "__main__":

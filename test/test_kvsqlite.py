@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 
 import kvsqlite
 import pytest
-from kvsqlite.encoders import StringEncoder
 from kvsqlite.sync import Client as SyncClient
+
+ENCODERS = [kvsqlite.PickleEncoder, kvsqlite.MarshalEncoder, kvsqlite.StringEncoder]
 
 
 async def call(value):
@@ -30,38 +31,43 @@ def kind(request):
     return request.param
 
 
+@pytest.fixture(params=ENCODERS, ids=lambda cls: cls.__name__)
+def encoder(request):
+    return request.param
+
+
 class TestKV:
-    async def test_set_get_delete(self, kind):
-        async with open_db(kind) as db:
-            assert await call(db.set("a", {"n": 1})) is True
-            assert await call(db.get("a")) == {"n": 1}
+    async def test_set_get_delete(self, kind, encoder):
+        async with open_db(kind, default_encoder=encoder) as db:
+            assert await call(db.set("a", "hello")) is True
+            assert await call(db.get("a")) == "hello"
             assert await call(db.exists("a")) is True
             assert await call(db.delete("a")) is True
             assert await call(db.get("a")) is None
             assert await call(db.exists("a")) is False
             assert await call(db.delete("missing")) is False
 
-    async def test_overwrite(self, kind):
-        async with open_db(kind) as db:
+    async def test_overwrite(self, kind, encoder):
+        async with open_db(kind, default_encoder=encoder) as db:
             await call(db.set("k", "first"))
             await call(db.set("k", "second"))
             assert await call(db.get("k")) == "second"
 
-    async def test_keys_rename_flush(self, kind):
-        async with open_db(kind) as db:
-            await call(db.set("user:1", 1))
-            await call(db.set("user:2", 2))
-            await call(db.set("other", 3))
+    async def test_keys_rename_flush(self, kind, encoder):
+        async with open_db(kind, default_encoder=encoder) as db:
+            await call(db.set("user:1", "1"))
+            await call(db.set("user:2", "2"))
+            await call(db.set("other", "3"))
             keys = sorted(row[0] for row in await call(db.keys("user:%")))
             assert keys == ["user:1", "user:2"]
             assert await call(db.rename("user:1", "user:9")) is True
-            assert await call(db.get("user:9")) == 1
+            assert await call(db.get("user:9")) == "1"
             assert await call(db.get("user:1")) is None
             assert await call(db.flush()) is True
             assert await call(db.keys()) is None
 
-    async def test_setex_ttl(self, kind):
-        async with open_db(kind) as db:
+    async def test_setex_ttl(self, kind, encoder):
+        async with open_db(kind, default_encoder=encoder) as db:
             assert await call(db.setex("tmp", 30, "v")) is True
             ttl = await call(db.ttl("tmp"))
             assert 0 < ttl <= 30
@@ -69,8 +75,8 @@ class TestKV:
             assert await call(db.expire("tmp", 60)) is True
             assert await call(db.ttl("tmp")) > 30
 
-    async def test_expired_keys_are_invisible(self, kind):
-        async with open_db(kind) as db:
+    async def test_expired_keys_are_invisible(self, kind, encoder):
+        async with open_db(kind, default_encoder=encoder) as db:
             await call(db.setex("gone", 1, "x"))
             await asyncio.sleep(1.05)
             assert await call(db.get("gone")) is None
@@ -80,9 +86,31 @@ class TestKV:
             assert await call(db.cleanex()) >= 1
 
 
+class TestEncoders:
+    @pytest.mark.parametrize(
+        "encoder,value",
+        [
+            (kvsqlite.PickleEncoder, {"n": 1}),
+            (kvsqlite.PickleEncoder, [1, 2, 3]),
+            (kvsqlite.MarshalEncoder, {"n": 1}),
+            (kvsqlite.MarshalEncoder, [1, 2, 3]),
+            (kvsqlite.MarshalEncoder, (1, 2)),
+            (kvsqlite.MarshalEncoder, 42),
+            (kvsqlite.StringEncoder, "hello"),
+        ],
+        ids=lambda v: v.__name__ if isinstance(v, type) else repr(v),
+    )
+    async def test_roundtrip(self, kind, encoder, value):
+        async with open_db(kind, default_encoder=encoder) as db:
+            assert await call(db.set("k", value)) is True
+            assert await call(db.get("k")) == value
+
+
 class TestConcurrency:
-    async def test_concurrent_get(self):
-        async with kvsqlite.Client(":memory:", workers=4) as db:
+    async def test_concurrent_get(self, encoder):
+        async with kvsqlite.Client(
+            ":memory:", workers=4, default_encoder=encoder
+        ) as db:
             for i in range(50):
                 await db.set("k%d" % i, "v%d" % i)
             results = await asyncio.gather(
@@ -92,40 +120,44 @@ class TestConcurrency:
         assert [r for r in results if isinstance(r, Exception)] == []
         assert results == ["v%d" % (i % 50) for i in range(400)]
 
-    async def test_concurrent_set(self):
-        async with kvsqlite.Client(":memory:", workers=4) as db:
+    async def test_concurrent_set(self, encoder):
+        async with kvsqlite.Client(
+            ":memory:", workers=4, default_encoder=encoder
+        ) as db:
             results = await asyncio.gather(
-                *[db.set("k%d" % i, i) for i in range(200)],
+                *[db.set("k%d" % i, "v%d" % i) for i in range(200)],
                 return_exceptions=True,
             )
             assert [r for r in results if isinstance(r, Exception)] == []
             assert all(r is True for r in results)
-            assert await db.get("k0") == 0
-            assert await db.get("k199") == 199
+            assert await db.get("k0") == "v0"
+            assert await db.get("k199") == "v199"
 
 
 class TestIsolation:
-    async def test_memory_clients_do_not_share_data(self):
-        async with kvsqlite.Client(":memory:") as a:
-            async with kvsqlite.Client(":memory:") as b:
+    async def test_memory_clients_do_not_share_data(self, encoder):
+        async with kvsqlite.Client(":memory:", default_encoder=encoder) as a:
+            async with kvsqlite.Client(":memory:", default_encoder=encoder) as b:
                 await a.set("k", "a")
                 await b.set("k", "b")
                 assert await a.get("k") == "a"
                 assert await b.get("k") == "b"
 
-    async def test_reopen_persists(self, tmp_path):
+    async def test_reopen_persists(self, tmp_path, encoder):
         path = str(tmp_path / "kv.sqlite")
-        async with kvsqlite.Client(path) as db:
+        async with kvsqlite.Client(path, default_encoder=encoder) as db:
             await db.set("k", "v")
-        async with kvsqlite.Client(path) as db:
+        async with kvsqlite.Client(path, default_encoder=encoder) as db:
             assert await db.get("k") == "v"
 
-    async def test_autocommit_false_survives_reopen(self, tmp_path):
+    async def test_autocommit_false_survives_reopen(self, tmp_path, encoder):
         path = str(tmp_path / "kv.sqlite")
-        async with kvsqlite.Client(path, autocommit=False) as db:
+        async with kvsqlite.Client(
+            path, autocommit=False, default_encoder=encoder
+        ) as db:
             assert await db.set("k", "v") is True
             assert await db.commit() is True
-        async with kvsqlite.Client(path) as db:
+        async with kvsqlite.Client(path, default_encoder=encoder) as db:
             assert await db.get("k") == "v"
 
 
@@ -147,11 +179,6 @@ class TestCompat:
             assert await db.get("old") == "kept"
             assert await db.setex("n", 60, "x") is True
             assert await db.get("n") == "x"
-
-    async def test_string_encoder(self, kind):
-        async with open_db(kind, default_encoder=StringEncoder) as db:
-            assert await call(db.set("k", "hello")) is True
-            assert await call(db.get("k")) == "hello"
 
     async def test_init_without_running_loop(self, tmp_path):
         db = kvsqlite.Client(str(tmp_path / "kv.sqlite"))

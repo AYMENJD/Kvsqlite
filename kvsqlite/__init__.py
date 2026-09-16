@@ -4,8 +4,8 @@ __license__ = "MIT License"
 
 VERSION = __version__
 
-__all__ = ["Client", "PickleEncoder", "StringEncoder", "sync"]
+__all__ = ["Client", "PickleEncoder", "MarshalEncoder", "StringEncoder", "sync"]
 
 from . import sync
 from .client import Client
-from .encoders import PickleEncoder, StringEncoder
+from .encoders import MarshalEncoder, PickleEncoder, StringEncoder
